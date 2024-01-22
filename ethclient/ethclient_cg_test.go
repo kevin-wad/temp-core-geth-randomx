@@ -26,7 +26,7 @@ import (
 // as well existence of all expected keys and values.
 func TestEthGetBlockByNumber_ValidJSONResponse(t *testing.T) {
 	backend, _ := newTestBackend(t)
-	client, _ := backend.Attach()
+	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
@@ -77,7 +77,7 @@ func TestEthGetBlockByNumber_ValidJSONResponse(t *testing.T) {
 		"baseFeePerGas": reHexAnyLen,
 
 		"uncles":       regexp.MustCompile(`^\[\]$`),
-		"transactions": regexp.MustCompile(`^\[\]$`),
+		"transactions": regexp.MustCompile(`^\[.*\]$`),
 	}
 
 	// Construct the 'pending' block expectations as a copy of the concrete block
@@ -185,7 +185,7 @@ func generateTestChainWithUncles() (*genesisT.Genesis, []*types.Block) {
 // These, different from canonical or side blocks, should NOT include the transactions field.
 func TestUncleResponseEncoding(t *testing.T) {
 	backend, chain := newTestBackendWithUncles(t)
-	client, _ := backend.Attach()
+	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,10 +27,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/lyra2"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -74,27 +76,24 @@ var Defaults = Config{
 		DatasetsOnDisk:   2,
 		DatasetsLockMmap: false,
 	},
-	NetworkId:               vars.DefaultNetworkID,
-	ProtocolVersions:        vars.DefaultProtocolVersions,
-	TxLookupLimit:           2350000,
-	LightPeers:              100,
-	UltraLightFraction:      75,
-	DatabaseCache:           512,
-	TrieCleanCache:          154,
-	TrieCleanCacheJournal:   "triecache",
-	TrieCleanCacheRejournal: 60 * time.Minute,
-	TrieDirtyCache:          256,
-	TrieTimeout:             60 * time.Minute,
-	SnapshotCache:           102,
-	Miner: miner.Config{
-		GasCeil:  8000000,
-		GasPrice: big.NewInt(vars.GWei),
-		Recommit: 3 * time.Second,
-	},
-	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   50000000,
-	GPO:         FullNodeGPO,
-	RPCTxFeeCap: 1, // 1 ether
+	NetworkId:          vars.DefaultNetworkID,
+	ProtocolVersions:   vars.DefaultProtocolVersions,
+	TxLookupLimit:      2350000,
+	LightPeers:         100,
+	UltraLightFraction: 75,
+	DatabaseCache:      512,
+	TrieCleanCache:     154,
+	TrieDirtyCache:     256,
+	TrieTimeout:        60 * time.Minute,
+	SnapshotCache:      102,
+	FilterLogCacheSize: 32,
+	Miner:              miner.DefaultConfig,
+	TxPool:             legacypool.DefaultConfig,
+	BlobPool:           blobpool.DefaultConfig,
+	RPCGasCap:          50000000,
+	RPCEVMTimeout:      5 * time.Second,
+	GPO:                FullNodeGPO,
+	RPCTxFeeCap:        1, // 1 ether
 }
 
 func init() {
@@ -118,7 +117,7 @@ func init() {
 	}
 }
 
-//go:generate gencodec -type Config -formats toml -out gen_config.go
+//go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
 // Config contains configuration options for of the ETH and LES protocols.
 type Config struct {
@@ -141,8 +140,10 @@ type Config struct {
 
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
-	// Whitelist of required block number -> hash values to accept
-	Whitelist map[uint64]common.Hash `toml:"-"`
+	// RequiredBlocks is a set of block number -> hash mappings which must be in the
+	// canonical chain of all remote peers. Setting the option makes geth verify the
+	// presence of these blocks for every new peer connection.
+	RequiredBlocks map[uint64]common.Hash `toml:"-"`
 
 	// Light client options
 	LightServ          int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
@@ -165,13 +166,14 @@ type Config struct {
 	DatabaseFreezer       string
 	DatabaseFreezerRemote string
 
-	TrieCleanCache          int
-	TrieCleanCacheJournal   string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
-	TrieCleanCacheRejournal time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
-	TrieDirtyCache          int
-	TrieTimeout             time.Duration
-	SnapshotCache           int
-	Preimages               bool
+	TrieCleanCache int
+	TrieDirtyCache int
+	TrieTimeout    time.Duration
+	SnapshotCache  int
+	Preimages      bool
+
+	// This is the number of blocks for which logs will be cached in the filter system.
+	FilterLogCacheSize int
 
 	// Mining options
 	Miner miner.Config
@@ -180,7 +182,8 @@ type Config struct {
 	Ethash ethash.Config
 
 	// Transaction pool options
-	TxPool core.TxPoolConfig
+	TxPool   legacypool.Config
+	BlobPool blobpool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
@@ -200,8 +203,11 @@ type Config struct {
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
 
+	// RPCEVMTimeout is the global timeout for eth-call.
+	RPCEVMTimeout time.Duration
+
 	// RPCTxFeeCap is the global transaction fee(price * gaslimit) cap for
-	// send-transction variants. The unit is ether.
+	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
 	// Checkpoint is a hardcoded checkpoint which can be nil.
@@ -212,56 +218,62 @@ type Config struct {
 
 	// Manual configuration field for ECBP1100 activation number. Used for modifying genesis config via CLI flag.
 	ECBP1100 *big.Int
+	// Manual configuration field for ECBP1100's disablement block number. Used for modifying genesis config via CLI flag.
+	OverrideECBP1100Deactivate *big.Int
 
 	// ECBP1100NoDisable overrides
 	// When this value is *true, ECBP100 will not (ever) be disabled; when *false, it will never be enabled.
 	ECBP1100NoDisable *bool `toml:",omitempty"`
 
-	// Mystique block override (TODO: remove after the fork)
-	OverrideMystique *big.Int `toml:",omitempty"`
+	// OverrideShanghai (TODO: remove after the fork)
+	OverrideShanghai *uint64 `toml:",omitempty"`
+
+	// OverrideCancun (TODO: remove after the fork)
+	OverrideCancun *uint64 `toml:",omitempty"`
+
+	// OverrideVerkle (TODO: remove after the fork)
+	OverrideVerkle *uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig ctypes.ChainConfigurator, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, cliqueConfig *ctypes.CliqueConfig, lyra2Config *lyra2.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
-	if chainConfig.GetConsensusEngineType().IsClique() {
-		return clique.New(&ctypes.CliqueConfig{
-			Period: chainConfig.GetCliquePeriod(),
-			Epoch:  chainConfig.GetCliqueEpoch(),
-		}, db)
+	var engine consensus.Engine
+	if cliqueConfig != nil {
+		engine = clique.New(cliqueConfig, db)
+	} else if lyra2Config != nil {
+		engine = lyra2.New(lyra2Config, notify, noverify)
+	} else {
+		switch ethashConfig.PowMode {
+		case ethash.ModeFake:
+			log.Warn("Ethash used in fake mode")
+			engine = ethash.NewFaker()
+		case ethash.ModeTest:
+			log.Warn("Ethash used in test mode")
+			engine = ethash.NewTester(nil, noverify)
+		case ethash.ModeShared:
+			log.Warn("Ethash used in shared mode")
+			engine = ethash.NewShared()
+		case ethash.ModePoissonFake:
+			log.Warn("Ethash used in fake Poisson mode")
+			engine = ethash.NewPoissonFaker()
+		default:
+			engine = ethash.New(ethash.Config{
+				PowMode:          ethashConfig.PowMode,
+				CacheDir:         stack.ResolvePath(ethashConfig.CacheDir),
+				CachesInMem:      ethashConfig.CachesInMem,
+				CachesOnDisk:     ethashConfig.CachesOnDisk,
+				CachesLockMmap:   ethashConfig.CachesLockMmap,
+				DatasetDir:       ethashConfig.DatasetDir,
+				DatasetsInMem:    ethashConfig.DatasetsInMem,
+				DatasetsOnDisk:   ethashConfig.DatasetsOnDisk,
+				DatasetsLockMmap: ethashConfig.DatasetsLockMmap,
+				NotifyFull:       ethashConfig.NotifyFull,
+				ECIP1099Block:    ethashConfig.ECIP1099Block,
+			}, notify, noverify)
+			engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
+		}
 	}
-	if chainConfig.GetConsensusEngineType().IsLyra2() {
-		return lyra2.New(notify, noverify)
-	}
-	// Otherwise assume proof-of-work
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-		return ethash.NewFaker()
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-		return ethash.NewTester(nil, noverify)
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
-		return ethash.NewShared()
-	case ethash.ModePoissonFake:
-		log.Warn("Ethash used in fake Poisson mode")
-		return ethash.NewPoissonFaker()
-	default:
-		engine := ethash.New(ethash.Config{
-			PowMode:          config.PowMode,
-			CacheDir:         stack.ResolvePath(config.CacheDir),
-			CachesInMem:      config.CachesInMem,
-			CachesOnDisk:     config.CachesOnDisk,
-			CachesLockMmap:   config.CachesLockMmap,
-			DatasetDir:       config.DatasetDir,
-			DatasetsInMem:    config.DatasetsInMem,
-			DatasetsOnDisk:   config.DatasetsOnDisk,
-			DatasetsLockMmap: config.DatasetsLockMmap,
-			NotifyFull:       config.NotifyFull,
-			ECIP1099Block:    chainConfig.GetEthashECIP1099Transition(),
-		}, notify, noverify)
-		engine.SetThreads(-1) // Disable CPU mining
-		return engine
-	}
+
+	return beacon.New(engine)
 }

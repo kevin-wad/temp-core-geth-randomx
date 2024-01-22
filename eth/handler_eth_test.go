@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,15 +20,16 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -39,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params/types/genesisT"
 	"github.com/ethereum/go-ethereum/params/types/goethereum"
 	"github.com/ethereum/go-ethereum/params/vars"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // testEthHandler is a mock event handler to listen for inbound network requests
@@ -51,7 +52,6 @@ type testEthHandler struct {
 }
 
 func (h *testEthHandler) Chain() *core.BlockChain              { panic("no backing chain") }
-func (h *testEthHandler) StateBloom() *trie.SyncBloom          { panic("no backing state bloom") }
 func (h *testEthHandler) TxPool() eth.TxPool                   { panic("no backing tx pool") }
 func (h *testEthHandler) AcceptTxs() bool                      { return true }
 func (h *testEthHandler) RunPeer(*eth.Peer, eth.Handler) error { panic("not used in tests") }
@@ -63,8 +63,12 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		h.blockBroadcasts.Send(packet.Block)
 		return nil
 
-	case *eth.NewPooledTransactionHashesPacket:
+	case *eth.NewPooledTransactionHashesPacket66:
 		h.txAnnounces.Send(([]common.Hash)(*packet))
+		return nil
+
+	case *eth.NewPooledTransactionHashesPacket68:
+		h.txAnnounces.Send(packet.Hashes)
 		return nil
 
 	case *eth.TransactionsPacket:
@@ -82,8 +86,9 @@ func (h *testEthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 
 // Tests that peers are correctly accepted (or rejected) based on the advertised
 // fork IDs in the protocol handshake.
-func TestForkIDSplit65(t *testing.T) { testForkIDSplit(t, eth.ETH65) }
 func TestForkIDSplit66(t *testing.T) { testForkIDSplit(t, eth.ETH66) }
+func TestForkIDSplit67(t *testing.T) { testForkIDSplit(t, eth.ETH67) }
+func TestForkIDSplit68(t *testing.T) { testForkIDSplit(t, eth.ETH68) }
 
 func testForkIDSplit(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -105,19 +110,17 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		gspecNoFork  = &genesisT.Genesis{Config: configNoFork}
 		gspecProFork = &genesisT.Genesis{Config: configProFork}
 
-		genesisNoFork  = core.MustCommitGenesis(dbNoFork, gspecNoFork)
-		genesisProFork = core.MustCommitGenesis(dbProFork, gspecProFork)
+		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, gspecNoFork, nil, engine, vm.Config{}, nil, nil)
+		chainProFork, _ = core.NewBlockChain(dbProFork, nil, gspecProFork, nil, engine, vm.Config{}, nil, nil)
 
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, configNoFork, engine, vm.Config{}, nil, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, configProFork, engine, vm.Config{}, nil, nil)
-
-		blocksNoFork, _  = core.GenerateChain(configNoFork, genesisNoFork, engine, dbNoFork, 2, nil)
-		blocksProFork, _ = core.GenerateChain(configProFork, genesisProFork, engine, dbProFork, 2, nil)
+		_, blocksNoFork, _  = core.GenerateChainWithGenesis(gspecNoFork, engine, 2, nil)
+		_, blocksProFork, _ = core.GenerateChainWithGenesis(gspecProFork, engine, 2, nil)
 
 		ethNoFork, _ = newHandler(&handlerConfig{
 			Database:   dbNoFork,
 			Chain:      chainNoFork,
 			TxPool:     newTestTxPool(),
+			Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 			Network:    1,
 			Sync:       downloader.FullSync,
 			BloomCache: 1,
@@ -126,6 +129,7 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 			Database:   dbProFork,
 			Chain:      chainProFork,
 			TxPool:     newTestTxPool(),
+			Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 			Network:    1,
 			Sync:       downloader.FullSync,
 			BloomCache: 1,
@@ -238,8 +242,9 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 }
 
 // Tests that received transactions are added to the local pool.
-func TestRecvTransactions65(t *testing.T) { testRecvTransactions(t, eth.ETH65) }
 func TestRecvTransactions66(t *testing.T) { testRecvTransactions(t, eth.ETH66) }
+func TestRecvTransactions67(t *testing.T) { testRecvTransactions(t, eth.ETH67) }
+func TestRecvTransactions68(t *testing.T) { testRecvTransactions(t, eth.ETH68) }
 
 func testRecvTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -248,7 +253,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	handler.handler.acceptTxs = 1 // mark synced to accept transactions
+	handler.handler.acceptTxs.Store(true) // mark synced to accept transactions
 
 	txs := make(chan core.NewTxsEvent)
 	sub := handler.txpool.SubscribeNewTxsEvent(txs)
@@ -271,7 +276,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 	var (
 		genesis = handler.chain.Genesis()
 		head    = handler.chain.CurrentBlock()
-		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
+		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
 	if err := src.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
@@ -296,8 +301,9 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions65(t *testing.T) { testSendTransactions(t, eth.ETH65) }
 func TestSendTransactions66(t *testing.T) { testSendTransactions(t, eth.ETH66) }
+func TestSendTransactions67(t *testing.T) { testSendTransactions(t, eth.ETH67) }
+func TestSendTransactions68(t *testing.T) { testSendTransactions(t, eth.ETH68) }
 
 func testSendTransactions(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -306,15 +312,15 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	handler := newTestHandler()
 	defer handler.close()
 
-	insert := make([]*types.Transaction, 100)
+	insert := make([]*txpool.Transaction, 100)
 	for nonce := range insert {
-		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, txsyncPackSize/10))
+		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), make([]byte, 10240))
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
-		insert[nonce] = tx
+		insert[nonce] = &txpool.Transaction{Tx: tx}
 	}
-	go handler.txpool.AddRemotes(insert) // Need goroutine to not block on feed
-	time.Sleep(250 * time.Millisecond)   // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
+	go handler.txpool.Add(insert, false, false) // Need goroutine to not block on feed
+	time.Sleep(250 * time.Millisecond)          // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
 
 	// Create a source handler to send messages through and a sink peer to receive them
 	p2pSrc, p2pSink := p2p.MsgPipe()
@@ -333,7 +339,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	var (
 		genesis = handler.chain.Genesis()
 		head    = handler.chain.CurrentBlock()
-		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
+		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
 	if err := sink.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
@@ -356,7 +362,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 	seen := make(map[common.Hash]struct{})
 	for len(seen) < len(insert) {
 		switch protocol {
-		case 65, 66:
+		case 66, 67, 68:
 			select {
 			case hashes := <-anns:
 				for _, hash := range hashes {
@@ -366,7 +372,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 					seen[hash] = struct{}{}
 				}
 			case <-bcasts:
-				t.Errorf("initial tx broadcast received on post eth/65")
+				t.Errorf("initial tx broadcast received on post eth/66")
 			}
 
 		default:
@@ -374,16 +380,17 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		}
 	}
 	for _, tx := range insert {
-		if _, ok := seen[tx.Hash()]; !ok {
-			t.Errorf("missing transaction: %x", tx.Hash())
+		if _, ok := seen[tx.Tx.Hash()]; !ok {
+			t.Errorf("missing transaction: %x", tx.Tx.Hash())
 		}
 	}
 }
 
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
-func TestTransactionPropagation65(t *testing.T) { testTransactionPropagation(t, eth.ETH65) }
 func TestTransactionPropagation66(t *testing.T) { testTransactionPropagation(t, eth.ETH66) }
+func TestTransactionPropagation67(t *testing.T) { testTransactionPropagation(t, eth.ETH67) }
+func TestTransactionPropagation68(t *testing.T) { testTransactionPropagation(t, eth.ETH68) }
 
 func testTransactionPropagation(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -392,6 +399,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// to receive them. We need multiple sinks since a one-to-one peering would
 	// broadcast all transactions without announcement.
 	source := newTestHandler()
+	source.handler.snapSync.Store(false) // Avoid requiring snap, otherwise some will be dropped below
 	defer source.close()
 
 	sinks := make([]*testHandler, 10)
@@ -399,7 +407,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		sinks[i] = newTestHandler()
 		defer sinks[i].close()
 
-		sinks[i].handler.acceptTxs = 1 // mark synced to accept transactions
+		sinks[i].handler.acceptTxs.Store(true) // mark synced to accept transactions
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
@@ -409,7 +417,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
 
-		sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{byte(i)}, "", nil, sourcePipe), sourcePipe, source.txpool)
+		sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{byte(i + 1)}, "", nil, sourcePipe), sourcePipe, source.txpool)
 		sinkPeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, sink.txpool)
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
@@ -430,23 +438,24 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		defer sub.Unsubscribe()
 	}
 	// Fill the source pool with transactions and wait for them at the sinks
-	txs := make([]*types.Transaction, 1024)
+	txs := make([]*txpool.Transaction, 1024)
 	for nonce := range txs {
 		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
-		txs[nonce] = tx
+		txs[nonce] = &txpool.Transaction{Tx: tx}
 	}
-	source.txpool.AddRemotes(txs)
+	source.txpool.Add(txs, false, false)
 
 	// Iterate through all the sinks and ensure they all got the transactions
 	for i := range sinks {
-		for arrived := 0; arrived < len(txs); {
+		for arrived, timeout := 0, false; arrived < len(txs) && !timeout; {
 			select {
 			case event := <-txChs[i]:
 				arrived += len(event.Txs)
-			case <-time.NewTimer(time.Second).C:
+			case <-time.After(2 * time.Second):
 				t.Errorf("sink %d: transaction propagation timed out: have %d, want %d", i, arrived, len(txs))
+				timeout = true
 			}
 		}
 	}
@@ -466,23 +475,23 @@ func TestCheckpointChallenge(t *testing.T) {
 	}{
 		// If checkpointing is not enabled locally, don't challenge and don't drop
 		{downloader.FullSync, false, false, false, false, false},
-		{downloader.FastSync, false, false, false, false, false},
+		{downloader.SnapSync, false, false, false, false, false},
 
 		// If checkpointing is enabled locally and remote response is empty, only drop during fast sync
 		{downloader.FullSync, true, false, true, false, false},
-		{downloader.FastSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
+		{downloader.SnapSync, true, false, true, false, true}, // Special case, fast sync, unsynced peer
 
 		// If checkpointing is enabled locally and remote response mismatches, always drop
 		{downloader.FullSync, true, false, false, false, true},
-		{downloader.FastSync, true, false, false, false, true},
+		{downloader.SnapSync, true, false, false, false, true},
 
 		// If checkpointing is enabled locally and remote response matches, never drop
 		{downloader.FullSync, true, false, false, true, false},
-		{downloader.FastSync, true, false, false, true, false},
+		{downloader.SnapSync, true, false, false, true, false},
 
 		// If checkpointing is enabled locally and remote times out, always drop
 		{downloader.FullSync, true, true, false, true, true},
-		{downloader.FastSync, true, true, false, true, true},
+		{downloader.SnapSync, true, true, false, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("sync %v checkpoint %v timeout %v empty %v match %v", tt.syncmode, tt.checkpoint, tt.timeout, tt.empty, tt.match), func(t *testing.T) {
@@ -492,8 +501,6 @@ func TestCheckpointChallenge(t *testing.T) {
 }
 
 func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpoint bool, timeout bool, empty bool, match bool, drop bool) {
-	t.Parallel()
-
 	// Reduce the checkpoint handshake challenge timeout
 	defer func(old time.Duration) { syncChallengeTimeout = old }(syncChallengeTimeout)
 	syncChallengeTimeout = 250 * time.Millisecond
@@ -504,10 +511,10 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	handler := newTestHandler()
 	defer handler.close()
 
-	if syncmode == downloader.FastSync {
-		atomic.StoreUint32(&handler.handler.fastSync, 1)
+	if syncmode == downloader.SnapSync {
+		handler.handler.snapSync.Store(true)
 	} else {
-		atomic.StoreUint32(&handler.handler.fastSync, 0)
+		handler.handler.snapSync.Store(false)
 	}
 	var response *types.Header
 	if checkpoint {
@@ -523,8 +530,8 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	defer p2pLocal.Close()
 	defer p2pRemote.Close()
 
-	local := eth.NewPeer(eth.ETH65, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pLocal), p2pLocal, handler.txpool)
-	remote := eth.NewPeer(eth.ETH65, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pRemote), p2pRemote, handler.txpool)
+	local := eth.NewPeer(eth.ETH66, p2p.NewPeerPipe(enode.ID{1}, "", nil, p2pLocal), p2pLocal, handler.txpool)
+	remote := eth.NewPeer(eth.ETH66, p2p.NewPeerPipe(enode.ID{2}, "", nil, p2pRemote), p2pRemote, handler.txpool)
 	defer local.Close()
 	defer remote.Close()
 
@@ -540,35 +547,46 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	var (
 		genesis = handler.chain.Genesis()
 		head    = handler.chain.CurrentBlock()
-		td      = handler.chain.GetTd(head.Hash(), head.NumberU64())
+		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
 	if err := remote.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
-
 	// Connect a new peer and check that we receive the checkpoint challenge.
 	if checkpoint {
-		if err := remote.ExpectRequestHeadersByNumber(response.Number.Uint64(), 1, 0, false); err != nil {
-			t.Fatalf("challenge mismatch: %v", err)
+		msg, err := p2pRemote.ReadMsg()
+		if err != nil {
+			t.Fatalf("failed to read checkpoint challenge: %v", err)
+		}
+		request := new(eth.GetBlockHeadersPacket66)
+		if err := msg.Decode(request); err != nil {
+			t.Fatalf("failed to decode checkpoint challenge: %v", err)
+		}
+		query := request.GetBlockHeadersPacket
+		if query.Origin.Number != response.Number.Uint64() || query.Amount != 1 || query.Skip != 0 || query.Reverse {
+			t.Fatalf("challenge mismatch: have [%d, %d, %d, %v] want [%d, %d, %d, %v]",
+				query.Origin.Number, query.Amount, query.Skip, query.Reverse,
+				response.Number.Uint64(), 1, 0, false)
 		}
 		// Create a block to reply to the challenge if no timeout is simulated.
 		if !timeout {
 			if empty {
-				if err := remote.SendBlockHeaders([]*types.Header{}); err != nil {
+				if err := remote.ReplyBlockHeadersRLP(request.RequestId, []rlp.RawValue{}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			} else if match {
-				if err := remote.SendBlockHeaders([]*types.Header{response}); err != nil {
+				responseRlp, _ := rlp.EncodeToBytes(response)
+				if err := remote.ReplyBlockHeadersRLP(request.RequestId, []rlp.RawValue{responseRlp}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			} else {
-				if err := remote.SendBlockHeaders([]*types.Header{{Number: response.Number}}); err != nil {
+				responseRlp, _ := rlp.EncodeToBytes(&types.Header{Number: response.Number})
+				if err := remote.ReplyBlockHeadersRLP(request.RequestId, []rlp.RawValue{responseRlp}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			}
 		}
 	}
-
 	// Wait until the test timeout passes to ensure proper cleanup
 	time.Sleep(syncChallengeTimeout + 300*time.Millisecond)
 
@@ -621,8 +639,8 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
 
-		sourcePeer := eth.NewPeer(eth.ETH65, p2p.NewPeerPipe(enode.ID{byte(i)}, "", nil, sourcePipe), sourcePipe, nil)
-		sinkPeer := eth.NewPeer(eth.ETH65, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, nil)
+		sourcePeer := eth.NewPeer(eth.ETH66, p2p.NewPeerPipe(enode.ID{byte(i)}, "", nil, sourcePipe), sourcePipe, nil)
+		sinkPeer := eth.NewPeer(eth.ETH66, p2p.NewPeerPipe(enode.ID{0}, "", nil, sinkPipe), sinkPipe, nil)
 		defer sourcePeer.Close()
 		defer sinkPeer.Close()
 
@@ -645,7 +663,8 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 	}
 	// Initiate a block propagation across the peers
 	time.Sleep(100 * time.Millisecond)
-	source.handler.BroadcastBlock(source.chain.CurrentBlock(), true)
+	header := source.chain.CurrentBlock()
+	source.handler.BroadcastBlock(source.chain.GetBlock(header.Hash(), header.Number.Uint64()), true)
 
 	// Iterate through all the sinks and ensure the correct number got the block
 	done := make(chan struct{}, peers)
@@ -673,8 +692,9 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 
 // Tests that a propagated malformed block (uncles or transactions don't match
 // with the hashes in the header) gets discarded and not broadcast forward.
-func TestBroadcastMalformedBlock65(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH65) }
 func TestBroadcastMalformedBlock66(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH66) }
+func TestBroadcastMalformedBlock67(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH67) }
+func TestBroadcastMalformedBlock68(t *testing.T) { testBroadcastMalformedBlock(t, eth.ETH68) }
 
 func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 	t.Parallel()
@@ -717,18 +737,19 @@ func testBroadcastMalformedBlock(t *testing.T, protocol uint) {
 
 	// Create various combinations of malformed blocks
 	head := source.chain.CurrentBlock()
+	block := source.chain.GetBlock(head.Hash(), head.Number.Uint64())
 
-	malformedUncles := head.Header()
+	malformedUncles := head
 	malformedUncles.UncleHash[0]++
-	malformedTransactions := head.Header()
+	malformedTransactions := head
 	malformedTransactions.TxHash[0]++
-	malformedEverything := head.Header()
+	malformedEverything := head
 	malformedEverything.UncleHash[0]++
 	malformedEverything.TxHash[0]++
 
 	// Try to broadcast all malformations and ensure they all get discarded
 	for _, header := range []*types.Header{malformedUncles, malformedTransactions, malformedEverything} {
-		block := types.NewBlockWithHeader(header).WithBody(head.Transactions(), head.Uncles())
+		block := types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles())
 		if err := src.SendNewBlock(block, big.NewInt(131136)); err != nil {
 			t.Fatalf("failed to broadcast block: %v", err)
 		}

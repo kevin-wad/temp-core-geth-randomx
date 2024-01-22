@@ -19,17 +19,17 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -55,12 +55,17 @@ func main() {
 		faucets[i], _ = crypto.GenerateKey()
 	}
 	// Pre-generate the ethash mining DAG so we don't race
-	ethash.MakeDataset(1, ethash.CalcEpochLength(0, nil), filepath.Join(os.Getenv("HOME"), ".ethash"))
+	ethash.MakeDataset(1, ethash.CalcEpochLength(0, nil), ethconfig.Defaults.Ethash.DatasetDir)
 
-	// Create an Ethash network based off of the Ropsten config
+	// Create an Ethash network
 	genesis := makeGenesis(faucets)
 
+	// Handle interrupts.
+	interruptCh := make(chan os.Signal, 5)
+	signal.Notify(interruptCh, os.Interrupt)
+
 	var (
+		stacks []*node.Node
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
@@ -80,14 +85,9 @@ func main() {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
+		stacks = append(stacks, stack)
 		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
-
-		// Inject the signer key and start sealing with it
-		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		if _, err := store.NewAccount(""); err != nil {
-			panic(err)
-		}
 	}
 
 	// Iterate over all the nodes and start mining
@@ -102,6 +102,16 @@ func main() {
 	// Start injecting transactions from the faucets like crazy
 	nonces := make([]uint64, len(faucets))
 	for {
+		// Stop when interrupted.
+		select {
+		case <-interruptCh:
+			for _, node := range stacks {
+				node.Close()
+			}
+			return
+		default:
+		}
+
 		// Pick a random mining node
 		index := rand.Intn(len(faucets))
 		backend := nodes[index%len(nodes)]
@@ -111,7 +121,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if err := backend.TxPool().AddLocal(tx); err != nil {
+		if err := backend.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, true, false); err != nil {
 			panic(err)
 		}
 		nonces[index]++
@@ -126,7 +136,7 @@ func main() {
 // makeGenesis creates a custom Ethash genesis block based on some pre-defined
 // faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey) *genesisT.Genesis {
-	genesis := params.DefaultRopstenGenesisBlock()
+	genesis := params.DefaultGenesisBlock()
 	genesis.Difficulty = vars.MinimumDifficulty
 	genesis.GasLimit = 25000000
 
@@ -144,7 +154,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *genesisT.Genesis {
 
 func makeMiner(genesis *genesisT.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",
@@ -168,13 +178,14 @@ func makeMiner(genesis *genesisT.Genesis) (*node.Node, *eth.Ethereum, error) {
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          core.DefaultTxPoolConfig,
+		TxPool:          legacypool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Ethash:          ethconfig.Defaults.Ethash,
 		Miner: miner.Config{
-			GasCeil:  genesis.GasLimit * 11 / 10,
-			GasPrice: big.NewInt(1),
-			Recommit: time.Second,
+			Etherbase: common.Address{1},
+			GasCeil:   genesis.GasLimit * 11 / 10,
+			GasPrice:  big.NewInt(1),
+			Recommit:  time.Second,
 		},
 	})
 	if err != nil {

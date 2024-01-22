@@ -55,6 +55,8 @@ import (
 //
 // runTest should be a function of type func(t *testing.T, name string, x <TestType>),
 // where TestType is the type of the test contained in test files.
+// nolint:unused
+// nolint:goimports
 func (tm *testMatcher) walkB(b *testing.B, dir string, runTest interface{}) {
 	// Walk the directory.
 	dirinfo, err := os.Stat(dir)
@@ -104,6 +106,7 @@ func (tm *testMatcher) walkB(b *testing.B, dir string, runTest interface{}) {
 	}
 }
 
+//nolint:unused
 func (tm *testMatcher) runTestFileB(b *testing.B, path, name string, runTest interface{}) {
 	if r, _ := tm.findSkip(name); r != "" {
 		b.Skip(r)
@@ -137,6 +140,7 @@ func (tm *testMatcher) runTestFileB(b *testing.B, path, name string, runTest int
 	}
 }
 
+//nolint:unused
 func makeMapFromTestFuncB(f interface{}) reflect.Value {
 	stringT := reflect.TypeOf("")
 	testingT := reflect.TypeOf((*testing.B)(nil))
@@ -149,6 +153,7 @@ func makeMapFromTestFuncB(f interface{}) reflect.Value {
 	return mp.Elem()
 }
 
+//nolint:unused
 func runTestFuncB(runTest interface{}, b *testing.B, name string, m reflect.Value, key string) {
 	reflect.ValueOf(runTest).Call([]reflect.Value{
 		reflect.ValueOf(b),

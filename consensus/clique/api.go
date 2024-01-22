@@ -196,12 +196,16 @@ func (sb *blockNumberOrHashOrRLP) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &input); err != nil {
 		return err
 	}
-	sb.RLP = hexutil.MustDecode(input)
+	blob, err := hexutil.Decode(input)
+	if err != nil {
+		return err
+	}
+	sb.RLP = blob
 	return nil
 }
 
 // GetSigner returns the signer for a specific clique block.
-// Can be called with either a blocknumber, blockhash or an rlp encoded blob.
+// Can be called with a block number, a block hash or a rlp encoded blob.
 // The RLP encoded blob can either be a block or a header.
 func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address, error) {
 	if len(rlpOrBlockNr.RLP) == 0 {
@@ -213,6 +217,9 @@ func (api *API) GetSigner(rlpOrBlockNr *blockNumberOrHashOrRLP) (common.Address,
 			header = api.chain.GetHeaderByHash(hash)
 		} else if number, ok := blockNrOrHash.Number(); ok {
 			header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+		}
+		if header == nil {
+			return common.Address{}, fmt.Errorf("missing block %v", blockNrOrHash.String())
 		}
 		return api.clique.Author(header)
 	}

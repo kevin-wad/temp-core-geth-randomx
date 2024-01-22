@@ -18,9 +18,10 @@ package tests
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,12 +30,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/confp"
 	"github.com/ethereum/go-ethereum/params/types/coregeth"
 	"github.com/ethereum/go-ethereum/params/types/genesisT"
+	"github.com/go-test/deep"
 	"github.com/iancoleman/strcase"
 )
 
@@ -103,25 +106,13 @@ func TestGenStateAll(t *testing.T) {
 	tm.generateFromReference("ConstantinopleFix", "ETC_Agharta")
 	tm.generateFromReference("Berlin", "ETC_Magneto")
 	tm.generateFromReference("Istanbul", "ETC_Phoenix")
+	tm.generateFromReference("London", "ETC_Mystique")
 
 	for _, dir := range []string{
 		stateTestDir,
 		legacyStateTestDir,
 	} {
 		tm.walkFullName(t, dir, tm.testWriteTest)
-
-		// Write the chain config file.
-		// testdata/GeneralStateTests -> testdata/GeneralStateTests_configs.json
-		b, err := json.MarshalIndent(tm.allConfigs, "", "    ")
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = ioutil.WriteFile(fmt.Sprintf("%s_configs.json", dir), b, os.ModePerm)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Reset map as to only write config pertinent to forks in a tests directory.
-		tm.allConfigs = make(map[string]*coregeth.CoreGethChainConfig)
 	}
 }
 
@@ -130,7 +121,7 @@ func TestGenStateAll(t *testing.T) {
 // For production use, use TestGenStateAll.
 func TestGenStateSingles(t *testing.T) {
 	if os.Getenv(CG_GENERATE_STATE_TESTS_KEY) == "" {
-		t.Skip()
+		t.Skip("Use CG_GENERATE_STATE_TESTS=1 to generate state tests.")
 	}
 	if os.Getenv(CG_CHAINCONFIG_FEATURE_EQ_COREGETH_KEY) == "" {
 		t.Fatal("Must use core-geth chain configs for test generation, converting if necessary.")
@@ -139,9 +130,10 @@ func TestGenStateSingles(t *testing.T) {
 	head := build.RunGit("rev-parse", "HEAD")
 	head = strings.TrimSpace(head)
 
-	files := []string{
-		filepath.Join(stateTestDir, "stStaticFlagEnabled/DelegatecallToPrecompileFromContractInitialization.json"),
-		filepath.Join(stateTestDir, "stStaticCall/StaticcallToPrecompileFromCalledContract.json"),
+	filesEnv := os.Getenv("TEST_FILES")
+	files := []string{}
+	for _, f := range strings.Split(filesEnv, ",") {
+		files = append(files, filepath.Join(stateTestDir, f))
 	}
 
 	tm := new(testMatcherGen)
@@ -155,11 +147,14 @@ func TestGenStateSingles(t *testing.T) {
 	tm.generateFromReference("ConstantinopleFix", "ETC_Agharta")
 	tm.generateFromReference("Berlin", "ETC_Magneto")
 	tm.generateFromReference("Istanbul", "ETC_Phoenix")
+	tm.generateFromReference("London", "ETC_Mystique")
 
 	for _, f := range files {
 		tm.runTestFile(t, f, f, tm.testWriteTest)
 	}
 }
+
+var generatedBasedir = filepath.Join(".", "testdata_generated")
 
 func (tm *testMatcherGen) testWriteTest(t *testing.T, name string, test *StateTest) {
 	// testWriteTest generates a file-based tests (writing a new file), and re-runs (testing) the generated test file.
@@ -171,7 +166,7 @@ func (tm *testMatcherGen) testWriteTest(t *testing.T, name string, test *StateTe
 	// Note that parallelism can cause greasy bugs around file during read/write which is why
 	// we use a temporary file instead of immediately overwriting the canonical file in the first place;
 	// for example, I saw regular encoding errors without this pattern.
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "geth-state-test-generation")
+	tmpFile, err := os.CreateTemp(os.TempDir(), "geth-state-test-generation")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,8 +178,46 @@ func (tm *testMatcherGen) testWriteTest(t *testing.T, name string, test *StateTe
 		// If the test passes (and it damn well should), then move the file to the canonical location.
 		func() {
 			tm.runTestFile(t, tmpFileName, tmpFileName, tm.stateTestRunner)
-			if err := os.Rename(tmpFileName, name); err != nil {
+
+			rel, err := filepath.Rel(baseDir, name)
+			if err != nil {
 				t.Fatal(err)
+			}
+
+			targetPath := filepath.Join(generatedBasedir, rel)
+
+			if err := os.MkdirAll(filepath.Dir(targetPath), os.ModePerm); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := os.Rename(tmpFileName, targetPath); err != nil {
+				t.Fatal(err)
+			}
+
+			// Write all relevant configs.
+
+			relSpl := strings.Split(rel, string(filepath.Separator))
+			targetDirCommon := filepath.Join(generatedBasedir, relSpl[0]) // e.g. "testdata_generated/GeneralStateTests"
+
+			// FIXME This is obviously super redundant.
+			sts := test.Subtests(nil)
+			for _, s := range sts {
+				target := tm.getGenerationTarget(s.Fork)
+				if target == "" {
+					continue
+				}
+				conf, _, err := GetChainConfig(target)
+				if err != nil {
+					t.Fatal(err)
+				}
+				b, _ := json.MarshalIndent(conf, "", "    ")
+				configPathTarget := filepath.Join(targetDirCommon, "configs", fmt.Sprintf("%s_config.json", target)) // e.g. "testdata_generated/GeneralStateTests/ETC_Atlantis_config.json"
+				os.MkdirAll(filepath.Dir(configPathTarget), os.ModePerm)
+				if _, statErr := os.Stat(configPathTarget); os.IsNotExist(statErr) {
+					if err := os.WriteFile(configPathTarget, b, os.ModePerm); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
 		},
 		// On-Skip:
@@ -203,13 +236,16 @@ func (tm *testMatcherGen) testWriteTest(t *testing.T, name string, test *StateTe
 // The resulting post-state is assigned to the test's post.Root and post.Logs hashes.
 func (tm *testMatcherGen) stateTestsGen(w io.WriteCloser, writeCallback, skipCallback func()) func(t *testing.T, name string, test *StateTest) {
 	return func(t *testing.T, name string, test *StateTest) {
-
 		subtests := test.Subtests(nil)
 
+		// targets are the subtests that will be generated
 		targets := map[string][]stPostState{}
 
-		for _, s := range subtests {
+		// eip1559ExistsAnySubtest will be used to omit `currentBaseFee` field
+		// from the test env if EIP1559 not present in any of the subtest configs.
+		eip1559ExistsAnySubtest := false
 
+		for _, s := range subtests {
 			// Prior to test-generation logic, record the genesis+chain config at the testmatcher level.
 			// This will allow us to generate a complete map of chain configurations for the test suite,
 			// whether the subtest's fork was used to generate any tests or not.
@@ -238,14 +274,18 @@ func (tm *testMatcherGen) stateTestsGen(w io.WriteCloser, writeCallback, skipCal
 				t.Fatalf("missing target fork config: %s, reference: %s", targetFork, referenceFork)
 			}
 
+			// Check to see if EIP1559 is enabled in the target subtest config.
+			tconfig, _, err := GetChainConfig(targetFork)
+			if err != nil {
+				t.Fatal(UnsupportedForkError{s.Fork})
+			}
+			if config.IsEnabled(tconfig.GetEIP1559Transition, big.NewInt(int64(test.json.Env.Number))) {
+				eip1559ExistsAnySubtest = true
+			}
+
 			if _, ok := targets[targetFork]; !ok {
 				subtestsLen := len(test.json.Post[referenceFork])
 				targets[targetFork] = make([]stPostState, subtestsLen)
-			}
-
-			targetSubtest := StateSubtest{
-				Fork:  targetFork,
-				Index: s.Index,
 			}
 
 			refPostState := test.json.Post[referenceFork]
@@ -259,33 +299,72 @@ func (tm *testMatcherGen) stateTestsGen(w io.WriteCloser, writeCallback, skipCal
 					Gas:   refPostState[s.Index].Indexes.Gas,
 					Value: refPostState[s.Index].Indexes.Value,
 				},
+				TxBytes:         refPostState[s.Index].TxBytes,
+				ExpectException: refPostState[s.Index].ExpectException,
+				// Root: <This is set pending the results of the Run under the target subtests.>
+				// Logs: <This is set pending the results of the Run under the target subtests.>
 			}
 
 			// vmConfig is constructed using global variables for possible EVM and EWASM interpreters.
 			// These interpreters are configured with environment variables and are assigned in an init() function.
 			vmConfig := vm.Config{EVMInterpreter: *testEVM, EWASMInterpreter: *testEWASM}
 
-			// Since we know that tests run with and without the snapshotter features are equivalent, either boolean state
-			// is valid and 'false' is arbitrary.
-			_, statedb, root, err := test.RunNoVerifyWithPost(targetSubtest, vmConfig, false, stPost)
-			if err != nil {
-				t.Fatalf("Error encountered at RunSetPost: %v", err)
+			targetSubtest := StateSubtest{
+				Fork:  targetFork,
+				Index: s.Index,
 			}
 
-			// Assign the generated testable values.
-			stPost.Root = common.UnprefixedHash(root)
-			stPost.Logs = common.UnprefixedHash(rlpHash(statedb.Logs()))
+			_, statedb, root, err := test.RunNoVerifyWithPost(targetSubtest, vmConfig, false, stPost)
+			if err != nil {
+				// Our runner has returned an error.
+				// This can either be an intentional error (testing for the error), or an "unexpected" error,
+				// which, since we're transposing tests, could still be a desirable error.
+				// For example, London adopts EIP1559, while its counterpart, Mystique, does not.
+				// In this case, the London test might return no error, while Mystique would return an error
+				// (eg "unsupported transaction type").
+
+				// An error was returned, but none defined for this test.
+				// We write the error to the generated test.
+				if refPostState[s.Index].ExpectException == "" {
+					// TODO: Turn this error into the kind of error constants that upstream uses, eg. TR_TypeNotSupported.
+					stPost.ExpectException = err.Error()
+					if errors.Is(err, types.ErrTxTypeNotSupported) {
+						stPost.ExpectException = "TR_TypeNotSupported"
+					}
+				}
+
+				// Either way, we maintain the incumbent post state values,
+				// although we do not expect our runner to return these for us.
+				stPost.Root = refPostState[s.Index].Root
+				stPost.Logs = refPostState[s.Index].Logs
+			}
+
+			if err == nil {
+				if refPostState[s.Index].ExpectException != "" {
+					// An error was expected, but none returned.
+					// We overwrite the expected error to a zero value, because it didn't fail under our target configuration.
+					stPost.ExpectException = ""
+				}
+				// If no error was returned, we can safely expect the root and statedb value to exist for us.
+				stPost.Root = common.UnprefixedHash(root)
+				stPost.Logs = common.UnprefixedHash(rlpHash(statedb.Logs()))
+			}
 
 			targets[targetFork][s.Index] = stPost
 		}
 
 		if len(targets) == 0 {
-			t.Skip()
+			t.Skip("No targets found for this test")
 			skipCallback()
 			return
 		}
 
+		if !eip1559ExistsAnySubtest {
+			test.json.Env.BaseFee = nil
+		}
+
 		// Install the generated cases to the test.
+		test.json.Post = make(map[string][]stPostState) // Reset the post state. We'll only add the generated post states.
 		for k, v := range targets {
 			test.json.Post[k] = v
 		}
@@ -322,13 +401,17 @@ func (tm *testMatcherGen) stateTestRunner(t *testing.T, name string, test *State
 			// These interpreters are configured with environment variables and are assigned in an init() function.
 			vmConfig := vm.Config{EVMInterpreter: *testEVM, EWASMInterpreter: *testEWASM}
 			_, _, err := test.Run(st, vmConfig, false)
+			if err != nil && len(test.json.Post[st.Fork][st.Index].ExpectException) > 0 {
+				// Ignore expected errors (TODO MariusVanDerWijden check error string)
+				return
+			}
 			checkedErr := tm.checkFailure(t, err)
 			if checkedErr != nil && *testEWASM != "" {
 				checkedErr = fmt.Errorf("%w ewasm=%s", checkedErr, *testEWASM)
 			}
 			if checkedErr != nil {
 				if tm.errorPanics {
-					panic(err)
+					panic(checkedErr)
 				} else {
 					t.Fatal(err)
 				}
@@ -346,9 +429,11 @@ func TestGenStateCoreGethConfigs(t *testing.T) {
 
 	// FYI: Possibly the slowest and stupidest way to write 14 files: read 42189 test to do it
 	// and write each file 1486 times.
-	for _, d := range []string{stateTestDir, legacyStateTestDir} {
+	for _, d := range []string{
+		stateTestDir,
+		legacyStateTestDir,
+	} {
 		st.walkFullName(t, d, func(t *testing.T, name string, test *StateTest) {
-
 			subtests := test.Subtests(nil)
 			for _, subtest := range subtests {
 				subtest := subtest
@@ -356,7 +441,7 @@ func TestGenStateCoreGethConfigs(t *testing.T) {
 				genesis := test.genesis(Forks[subtest.Fork])
 
 				cgConfig := &coregeth.CoreGethChainConfig{}
-				err := confp.Convert(genesis.Config, cgConfig)
+				err := confp.Crush(cgConfig, genesis.Config, true)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -370,7 +455,7 @@ func TestGenStateCoreGethConfigs(t *testing.T) {
 					coregethSpecsDir,
 					strcase.ToSnake(subtest.Fork)+"_test.json",
 				)
-				err = ioutil.WriteFile(filename, b, os.ModePerm)
+				err = os.WriteFile(filename, b, os.ModePerm)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -399,7 +484,6 @@ func TestGeneratedConfigsEq(t *testing.T) {
 
 	// Special case handling for EIP1283.
 	if coded.GetEIP1283Transition() == nil && coded.GetEIP1283DisableTransition() == nil {
-
 		e1283 := gen.Config.GetEIP1283Transition()
 		d1283 := gen.Config.GetEIP1283DisableTransition()
 
@@ -408,10 +492,9 @@ func TestGeneratedConfigsEq(t *testing.T) {
 			gen.Config.SetEIP1283Transition(nil)
 			gen.Config.SetEIP1283DisableTransition(nil)
 		}
-
 	}
 
-	err = confp.Equivalent(coded, gen.Config)
+	err = confp.Equivalent(gen.Config, coded)
 	if err != nil {
 		t.Error(err)
 	}
@@ -428,41 +511,54 @@ func TestConvertDefaultsBounce(t *testing.T) {
 		}
 		return fmt.Sprintf("%d", *n)
 	}
-	for _, forkName := range []string{"Constantinople", "Istanbul", "Berlin"} {
+	for _, forkName := range []string{"Constantinople", "Istanbul", "Berlin", "London", "ArrowGlacier"} {
 		t.Run(forkName, func(t *testing.T) {
-			berlin := Forks[forkName]
-			eip1234 := berlin.GetEthashEIP1234Transition()
+			forkConfig := Forks[forkName]
+			eip1234 := forkConfig.GetEthashEIP1234Transition()
 
-			cg := &coregeth.CoreGethChainConfig{}
-			err := confp.Convert(berlin, cg)
+			// Crush the original config (type) into the CoreGeth chain config data type.
+			coreGethConfig := &coregeth.CoreGethChainConfig{}
+			err := confp.Crush(coreGethConfig, forkConfig, true)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			cg1234 := cg.GetEthashEIP1234Transition()
+			// Read the EIP1234 value from the converted version.
+			cg1234 := coreGethConfig.GetEthashEIP1234Transition()
 
-			t.Log(safePrint(eip1234), safePrint(cg1234))
+			t.Logf("DEBUG1/%s eip=%s cg=%s", forkName, safePrint(eip1234), safePrint(cg1234))
 
-			err = confp.Equivalent(berlin, cg)
+			// Assert that the converted chain configuration data type is equivalent to the original.
+			err = confp.Equivalent(forkConfig, coreGethConfig)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			b, _ := json.MarshalIndent(cg, "", "    ")
+			b, _ := json.MarshalIndent(coreGethConfig, "", "    ")
 			t.Log(string(b))
 
-			cg2 := &coregeth.CoreGethChainConfig{}
-			err = json.Unmarshal(b, cg2)
+			coreGethConfig2 := &coregeth.CoreGethChainConfig{}
+			err = json.Unmarshal(b, coreGethConfig2)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			cg2_1234 := cg2.GetEthashEIP1234Transition()
+			cg2_1234 := coreGethConfig2.GetEthashEIP1234Transition()
 
-			t.Log(safePrint(eip1234), safePrint(cg1234), safePrint(cg2_1234))
+			t.Logf("DEBUG2/%s eip=%s cg=%s cg2=%s", forkName, safePrint(eip1234), safePrint(cg1234), safePrint(cg2_1234))
 
-			err = confp.Equivalent(berlin, cg2)
+			err = confp.Equivalent(forkConfig, coreGethConfig2)
 			if err != nil {
+				jb, err := json.MarshalIndent(coreGethConfig2, "", "    ")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("%s", string(jb))
+
+				for _, d := range deep.Equal(coreGethConfig, coreGethConfig2) {
+					t.Logf("diff: %s", d)
+				}
+
 				t.Fatal(forkName, err)
 			}
 		})

@@ -32,12 +32,16 @@ var (
 	EIP2384DifficultyBombDelay = big.NewInt(9000000)
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-3554.md
 	EIP3554DifficultyBombDelay = big.NewInt(9700000)
+	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4345.md
+	EIP4345DifficultyBombDelay = big.NewInt(10700000)
+	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-5133.md
+	EIP5133DifficultyBombDelay = big.NewInt(11_400_000)
 )
 
 var (
 	// SupportedProtocolVersions are the supported versions of the `eth` protocol (first
 	// is primary).
-	SupportedProtocolVersions = []uint{66, 65}
+	SupportedProtocolVersions = []uint{68, 67, 66}
 
 	// DefaultProtocolVersions are the protocol version defaults.
 	DefaultProtocolVersions = SupportedProtocolVersions
@@ -48,10 +52,12 @@ var (
 	MinGasLimit          uint64 = 5000  // Minimum the gas limit may ever be.
 	MaximumExtraDataSize uint64 = 32    // Maximum size extra data may be after Genesis.
 	MaxCodeSize          uint64 = 41000 // Maximum bytecode to permit for a contract, (Eticav2 is 30000 size, 40k avoids need to hardfork before future Etica contracts deployments)
+	MaxInitCodeSize             = 2 * MaxCodeSize // Maximum initcode to permit in a creation transaction and create instructions
 )
 
-var (
-	GenesisGasLimit uint64 = 4712388 // Gas limit of the Genesis block.
+const (
+	GenesisGasLimit uint64 = 4712388            // Gas limit of the Genesis block.
+	MaxGasLimit     uint64 = 0x7fffffffffffffff // Maximum the gas limit (2^63-1).
 
 	ExpByteGas            uint64 = 10    // Times ceil(log256(exponent)) for the EXP instruction.
 	SloadGas              uint64 = 50    // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
@@ -64,8 +70,9 @@ var (
 	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
 	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
 
-	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
-	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.
+	Keccak256Gas     uint64 = 30 // Once per KECCAK256 operation.
+	Keccak256WordGas uint64 = 6  // Once per word of the KECCAK256 operation's data.
+	InitCodeWordGas  uint64 = 2  // Once per word of the init code when creating a contract.
 
 	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation.
 	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
@@ -147,8 +154,9 @@ var (
 	// Introduced in Tangerine Whistle (Eip 150)
 	CreateBySelfdestructGas uint64 = 25000
 
-	BaseFeeChangeDenominator uint64 = 8 // Bounds the amount the base fee can change between blocks.
-	ElasticityMultiplier     uint64 = 2 // Bounds the maximum gas limit an EIP-1559 block may have.
+	DefaultBaseFeeChangeDenominator = 8          // Bounds the amount the base fee can change between blocks.
+	DefaultElasticityMultiplier     = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
+	InitialBaseFee                  = 1000000000 // Initial base fee for EIP-1559 blocks.
 
 	// Precompiled contract gas prices
 
@@ -182,10 +190,16 @@ var (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
-)
 
-const (
-	InitialBaseFee = 1000000000 // Initial base fee for EIP-1559 blocks.
+	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
+	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
+	BlobTxHashVersion                  = 0x01    // Version byte of the commitment hash
+	BlobTxMaxBlobGasPerBlock           = 1 << 19 // Maximum consumable blob gas for data blobs per block
+	BlobTxTargetBlobGasPerBlock        = 1 << 18 // Target consumable blob gas for data blobs per block (for 1559-like pricing)
+	BlobTxBlobGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
+	BlobTxMinBlobGasprice              = 1       // Minimum gas price for data blobs
+	BlobTxBlobGaspriceUpdateFraction   = 2225652 // Controls the maximum rate of change for blob gas price
+	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations

@@ -17,18 +17,16 @@
 // faucet is an Ether faucet backed by a light client.
 package main
 
-//go:generate go-bindata -nometadata -o website.go faucet.html
-//go:generate gofmt -w -s website.go
-
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -53,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -60,7 +59,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/params/types/ctypes"
 	"github.com/ethereum/go-ethereum/params/types/genesisT"
 	"github.com/gorilla/websocket"
 )
@@ -69,10 +67,10 @@ var (
 	foundationFlag = flag.Bool("chain.foundation", false, "Configure genesis and bootnodes for foundation chain defaults")
 	classicFlag    = flag.Bool("chain.classic", false, "Configure genesis and bootnodes for classic chain defaults")
 	mordorFlag     = flag.Bool("chain.mordor", false, "Configure genesis and bootnodes for mordor chain defaults")
-	kottiFlag      = flag.Bool("chain.kotti", false, "Configure genesis and bootnodes for kotti chain defaults")
 	testnetFlag    = flag.Bool("chain.testnet", false, "Configure genesis and bootnodes for testnet chain defaults")
 	rinkebyFlag    = flag.Bool("chain.rinkeby", false, "Configure genesis and bootnodes for rinkeby chain defaults")
 	goerliFlag     = flag.Bool("chain.goerli", false, "Configure genesis and bootnodes for goerli chain defaults")
+	sepoliaFlag    = flag.Bool("chain.sepolia", false, "Configure genesis and bootnodes for sepolia chain defaults")
 
 	attachFlag    = flag.String("attach", "", "Attach to an IPC or WS endpoint")
 	attachChainID = flag.Int64("attach.chainid", 0, "Configure fallback chain id value for use in attach mode (used if target does not have value available yet).")
@@ -110,20 +108,18 @@ var chainFlags = []*bool{
 	foundationFlag,
 	classicFlag,
 	mordorFlag,
-	kottiFlag,
 	testnetFlag,
 	rinkebyFlag,
 	goerliFlag,
+	sepoliaFlag,
 }
 
 var (
 	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 )
 
-var (
-	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
-	gitDate   = "" // Git commit date YYYYMMDD of the release (set via linker flags)
-)
+//go:embed faucet.html
+var websiteTmpl string
 
 func faucetDirFromChainIndicators(chainID uint64, genesisHash common.Hash) string {
 	datadir := filepath.Join(os.Getenv("HOME"), ".faucet")
@@ -136,16 +132,12 @@ func faucetDirFromChainIndicators(chainID uint64, genesisHash common.Hash) strin
 			return filepath.Join(datadir, "classic")
 		}
 		return filepath.Join(datadir, "")
-	case params.RopstenGenesisHash:
-		return filepath.Join(datadir, "ropsten")
-	case params.RinkebyGenesisHash:
-		return filepath.Join(datadir, "rinkeby")
 	case params.GoerliGenesisHash:
 		return filepath.Join(datadir, "goerli")
-	case params.KottiGenesisHash:
-		return filepath.Join(datadir, "kotti")
 	case params.MordorGenesisHash:
 		return filepath.Join(datadir, "mordor")
+	case params.SepoliaGenesisHash:
+		return filepath.Join(datadir, "sepolia")
 	}
 	return datadir
 }
@@ -159,10 +151,8 @@ func parseChainFlags() (gs *genesisT.Genesis, bs string, netid uint64) {
 		{*foundationFlag, params.DefaultGenesisBlock(), nil},
 		{*classicFlag, params.DefaultClassicGenesisBlock(), nil},
 		{*mordorFlag, params.DefaultMordorGenesisBlock(), nil},
-		{*testnetFlag, params.DefaultRopstenGenesisBlock(), nil},
-		{*rinkebyFlag, params.DefaultRinkebyGenesisBlock(), nil},
-		{*kottiFlag, params.DefaultKottiGenesisBlock(), nil},
 		{*goerliFlag, params.DefaultGoerliGenesisBlock(), nil},
+		{*sepoliaFlag, params.DefaultSepoliaGenesisBlock(), nil},
 	}
 
 	var bss []string
@@ -178,7 +168,7 @@ func parseChainFlags() (gs *genesisT.Genesis, bs string, netid uint64) {
 
 	// allow overrides
 	if *genesisFlag != "" {
-		blob, err := ioutil.ReadFile(*genesisFlag)
+		blob, err := os.ReadFile(*genesisFlag)
 		if err != nil {
 			log.Crit("Failed to read genesis block contents", "genesis", *genesisFlag, "err", err)
 		}
@@ -270,7 +260,7 @@ func auditFlagUse() {
 	}
 
 	if *syncmodeFlag != "" {
-		allowedModes := []string{"light", "fast", "full"}
+		allowedModes := []string{"light", "snap", "full"}
 		var ok bool
 		for _, mode := range allowedModes {
 			if mode == *syncmodeFlag {
@@ -333,13 +323,8 @@ func main() {
 			periods[i] = strings.TrimSuffix(periods[i], "s")
 		}
 	}
-	// Load up and render the faucet website
-	tmpl, err := Asset("faucet.html")
-	if err != nil {
-		log.Crit("Failed to load the faucet template", "err", err)
-	}
 	website := new(bytes.Buffer)
-	err = template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
+	err := template.Must(template.New("").Parse(websiteTmpl)).Execute(website, map[string]interface{}{
 		"Network":   *netnameFlag,
 		"Amounts":   amounts,
 		"Periods":   periods,
@@ -354,7 +339,6 @@ func main() {
 		log.Info("Using chain/net config", "network id", *netFlag, "bootnodes", *bootFlag, "chain config", fmt.Sprintf("%v", genesis.Config))
 
 		// Convert the bootnodes to internal enode representations
-		var enodes []*enode.Node
 		for _, boot := range strings.Split(*bootFlag, ",") {
 			if url, err := enode.Parse(enode.ValidSchemes, boot); err == nil {
 				enodes = append(enodes, url)
@@ -371,7 +355,7 @@ func main() {
 	}
 
 	// Load up the account key and decrypt its password
-	if blob, err = ioutil.ReadFile(*accPassFlag); err != nil {
+	if blob, err = os.ReadFile(*accPassFlag); err != nil {
 		log.Crit("Failed to read account password contents", "file", *accPassFlag, "err", err)
 	}
 	pass := strings.TrimSuffix(string(blob), "\n")
@@ -414,7 +398,7 @@ func main() {
 
 	keystorePath := filepath.Join(faucetDirFromChainIndicators(chainID, genesisHash), "keys")
 	ks := keystore.NewKeyStore(keystorePath, keystore.StandardScryptN, keystore.StandardScryptP)
-	if blob, err = ioutil.ReadFile(*accJSONFlag); err != nil {
+	if blob, err = os.ReadFile(*accJSONFlag); err != nil {
 		log.Crit("Failed to read account key contents", "file", *accJSONFlag, "err", err)
 	}
 	acc, err := ks.Import(blob, pass, pass)
@@ -460,10 +444,9 @@ type request struct {
 
 // faucet represents a crypto faucet backed by an Ethereum light client.
 type faucet struct {
-	config ctypes.ChainConfigurator // Chain configurations for signing
-	stack  *node.Node               // Ethereum protocol stack
-	client *ethclient.Client        // Client connection to the Ethereum chain
-	index  []byte                   // Index page to serve up on the web
+	stack  *node.Node        // Ethereum protocol stack
+	client *ethclient.Client // Client connection to the Ethereum chain
+	index  []byte            // Index page to serve up on the web
 
 	keystore *keystore.KeyStore // Keystore containing the single signer
 	account  accounts.Account   // Account funding user faucet requests
@@ -507,7 +490,6 @@ func migrateFaucetDirectory(faucetDataDir string) error {
 		return nil
 	}
 	if err == nil && d.IsDir() {
-
 		// Path exists and is a directory.
 		log.Warn("Found existing 'MultiFaucet' directory, migrating", "old", oldFaucetNodePath, "new", targetFaucetNodePath)
 		if err := os.Rename(oldFaucetNodePath, targetFaucetNodePath); err != nil {
@@ -524,7 +506,6 @@ func migrateFaucetDirectory(faucetDataDir string) error {
 
 // startStack starts the node stack, ensures peering, and assigns the respective ethclient to the faucet.
 func (f *faucet) startStack(genesis *genesisT.Genesis, port int, enodes []*enode.Node, network uint64) error {
-
 	genesisHash := core.GenesisToBlock(genesis, nil).Hash()
 
 	faucetDataDir := faucetDirFromChainIndicators(genesis.Config.GetChainID().Uint64(), genesisHash)
@@ -535,9 +516,10 @@ func (f *faucet) startStack(genesis *genesisT.Genesis, port int, enodes []*enode
 	}
 
 	// Assemble the raw devp2p protocol stack
+	git, _ := version.VCS()
 	stack, err := node.New(&node.Config{
 		Name:    coreFaucetNodeName,
-		Version: params.VersionWithCommit(gitCommit, gitDate),
+		Version: params.VersionWithCommit(git.Commit, git.Date),
 		DataDir: faucetDataDir,
 		P2P: p2p.Config{
 			NAT: nat.Any(),
@@ -561,8 +543,8 @@ func (f *faucet) startStack(genesis *genesisT.Genesis, port int, enodes []*enode
 	switch *syncmodeFlag {
 	case "light":
 		cfg.SyncMode = downloader.LightSync
-	case "fast":
-		cfg.SyncMode = downloader.FastSync
+	case "snap":
+		cfg.SyncMode = downloader.SnapSync
 		cfg.ProtocolVersions = ethconfig.Defaults.ProtocolVersions
 	case "full":
 		cfg.SyncMode = downloader.FullSync
@@ -580,8 +562,6 @@ func (f *faucet) startStack(genesis *genesisT.Genesis, port int, enodes []*enode
 		} else {
 			utils.SetDNSDiscoveryDefaults(&cfg, core.GenesisToBlock(genesis, nil).Hash())
 		}
-	case params.KottiGenesisHash:
-		utils.SetDNSDiscoveryDefaults2(&cfg, params.KottiDNSNetwork1)
 	case params.MordorGenesisHash:
 		utils.SetDNSDiscoveryDefaults2(&cfg, params.MordorDNSNetwork1)
 	default:
@@ -627,11 +607,7 @@ func (f *faucet) startStack(genesis *genesisT.Genesis, port int, enodes []*enode
 		}
 	}
 	// Attach to the client and retrieve and interesting metadatas
-	api, err := stack.Attach()
-	if err != nil {
-		stack.Close()
-		return err
-	}
+	api := stack.Attach()
 	f.stack = stack
 	f.client = ethclient.NewClient(api)
 	return nil
@@ -1094,7 +1070,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 	case tokenV2 != "":
 		return authTwitterWithTokenV2(tweetID, tokenV2)
 	}
-	// Twiter API token isn't provided so we just load the public posts
+	// Twitter API token isn't provided so we just load the public posts
 	// and scrape it for the Ethereum address and profile URL. We need to load
 	// the mobile page though since the main page loads tweet contents via JS.
 	url = strings.Replace(url, "https://twitter.com/", "https://mobile.twitter.com/", 1)
@@ -1113,7 +1089,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 	}
 	username := parts[len(parts)-3]
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", "", "", common.Address{}, err
 	}
@@ -1123,7 +1099,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 		return "", "", "", common.Address{}, errors.New("No Ethereum address found to fund")
 	}
 	var avatar string
-	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
+	if parts = regexp.MustCompile(`src="([^"]+twimg\.com/profile_images[^"]+)"`).FindStringSubmatch(string(body)); len(parts) == 2 {
 		avatar = parts[1]
 	}
 	return username + "@twitter", username, avatar, address, nil
@@ -1135,7 +1111,7 @@ func authTwitter(url string, tokenV1, tokenV2 string) (string, string, string, c
 func authTwitterWithTokenV1(tweetID string, token string) (string, string, string, common.Address, error) {
 	// Query the tweet details from Twitter
 	url := fmt.Sprintf("https://api.twitter.com/1.1/statuses/show.json?id=%s", tweetID)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", "", "", common.Address{}, err
 	}
@@ -1172,7 +1148,7 @@ func authTwitterWithTokenV1(tweetID string, token string) (string, string, strin
 func authTwitterWithTokenV2(tweetID string, token string) (string, string, string, common.Address, error) {
 	// Query the tweet details from Twitter
 	url := fmt.Sprintf("https://api.twitter.com/2/tweets/%s?expansions=author_id&user.fields=profile_image_url", tweetID)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", "", "", common.Address{}, err
 	}
@@ -1239,17 +1215,17 @@ func authFacebook(url string) (string, string, common.Address, error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", "", common.Address{}, err
 	}
 	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
 	if address == (common.Address{}) {
 		//lint:ignore ST1005 This error is to be displayed in the browser
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund. Please check the post URL and verify that it can be viewed publicly.")
 	}
 	var avatar string
-	if parts = regexp.MustCompile("src=\"([^\"]+fbcdn.net[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
+	if parts = regexp.MustCompile(`src="([^"]+fbcdn\.net[^"]+)"`).FindStringSubmatch(string(body)); len(parts) == 2 {
 		avatar = parts[1]
 	}
 	return username + "@facebook", avatar, address, nil

@@ -3,7 +3,6 @@ package ethclient
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -28,7 +27,7 @@ func TestRPCDiscover_BuildStatic(t *testing.T) {
 	}
 
 	backend, _ := newTestBackend(t)
-	client, _ := backend.Attach()
+	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
 
@@ -49,7 +48,7 @@ func TestRPCDiscover_BuildStatic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ioutil.WriteFile("../build/static/openrpc.json", data, os.ModePerm)
+	err = os.WriteFile("../build/static/openrpc.json", data, os.ModePerm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +345,7 @@ _None_
 
 		nDoc := &meta_schema.OpenrpcDocument{}
 		*nDoc = *res
-		nDoc.Methods = (*meta_schema.Methods)(&group)
+		nDoc.Methods = (*meta_schema.Methods)(&group) //nolint:gosec
 		err = tpl.Execute(fi, nDoc)
 		if err != nil {
 			t.Fatal(err)

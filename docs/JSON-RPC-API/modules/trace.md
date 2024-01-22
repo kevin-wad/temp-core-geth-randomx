@@ -7,7 +7,7 @@
 
 | Entity | Version |
 | --- | --- |
-| Source | <code>1.11.23-unstable/generated-at:2021-04-30T19:24:24+03:00</code> |
+| Source | <code>1.12.14-unstable/generated-at:2023-09-04T08:02:34-06:00</code> |
 | OpenRPC | <code>1.2.6</code> |
 
 ---
@@ -104,16 +104,16 @@ config <code>*TraceConfig</code>
 		- Debug: 
 			- type: `boolean`
 
-		- DisableMemory: 
-			- type: `boolean`
-
-		- DisableReturnData: 
-			- type: `boolean`
-
 		- DisableStack: 
 			- type: `boolean`
 
 		- DisableStorage: 
+			- type: `boolean`
+
+		- EnableMemory: 
+			- type: `boolean`
+
+		- EnableReturnData: 
 			- type: `boolean`
 
 		- Limit: 
@@ -135,6 +135,12 @@ config <code>*TraceConfig</code>
 		- Tracer: 
 			- type: `string`
 
+		- TracerConfig: 
+			- media: 
+				- binaryEncoding: `base64`
+
+			- type: `string`
+
 		- overrides: 
 			- additionalProperties: `true`
 
@@ -153,16 +159,16 @@ config <code>*TraceConfig</code>
             "Debug": {
                 "type": "boolean"
             },
-            "DisableMemory": {
-                "type": "boolean"
-            },
-            "DisableReturnData": {
-                "type": "boolean"
-            },
             "DisableStack": {
                 "type": "boolean"
             },
             "DisableStorage": {
+                "type": "boolean"
+            },
+            "EnableMemory": {
+                "type": "boolean"
+            },
+            "EnableReturnData": {
                 "type": "boolean"
             },
             "Limit": {
@@ -182,6 +188,12 @@ config <code>*TraceConfig</code>
                 "type": "string"
             },
             "Tracer": {
+                "type": "string"
+            },
+            "TracerConfig": {
+                "media": {
+                    "binaryEncoding": "base64"
+                },
                 "type": "string"
             },
             "overrides": {
@@ -292,11 +304,18 @@ func (api *TraceAPI) Block(ctx context.Context, number rpc.BlockNumber, config *
 	}
 	results := []interface{}{}
 	for _, result := range traceResults {
-		var tmp []interface{}
+		if result.Error != "" {
+			return nil, errors.New(result.Error)
+		}
+		var tmp interface{}
 		if err := json.Unmarshal(result.Result.(json.RawMessage), &tmp); err != nil {
 			return nil, err
 		}
-		results = append(results, tmp...)
+		if *config.Tracer == "stateDiffTracer" {
+			results = append(results, tmp)
+		} else {
+			results = append(results, tmp.([]interface{})...)
+		}
 	}
 	results = append(results, traceReward)
 	for _, uncleReward := range traceUncleRewards {
@@ -305,7 +324,7 @@ func (api *TraceAPI) Block(ctx context.Context, number rpc.BlockNumber, config *
 	return results, nil
 }
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L175" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L190" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -326,7 +345,7 @@ Parameters must be given _by position_.
 
 
 __1:__ 
-args <code>ethapi.CallArgs</code> 
+args <code>ethapi.TransactionArgs</code> 
 
   + Required: ✓ Yes
 
@@ -360,6 +379,11 @@ args <code>ethapi.CallArgs</code>
 
 			- type: `array`
 
+		- chainId: 
+			- pattern: `^0x[a-fA-F0-9]+$`
+			- title: `integer`
+			- type: `string`
+
 		- data: 
 			- pattern: `^0x([a-fA-F\d])+$`
 			- title: `dataWord`
@@ -378,6 +402,26 @@ args <code>ethapi.CallArgs</code>
 		- gasPrice: 
 			- pattern: `^0x[a-fA-F0-9]+$`
 			- title: `integer`
+			- type: `string`
+
+		- input: 
+			- pattern: `^0x([a-fA-F\d])+$`
+			- title: `dataWord`
+			- type: `string`
+
+		- maxFeePerGas: 
+			- pattern: `^0x[a-fA-F0-9]+$`
+			- title: `integer`
+			- type: `string`
+
+		- maxPriorityFeePerGas: 
+			- pattern: `^0x[a-fA-F0-9]+$`
+			- title: `integer`
+			- type: `string`
+
+		- nonce: 
+			- pattern: `^0x([a-fA-F\d])+$`
+			- title: `uint64`
 			- type: `string`
 
 		- to: 
@@ -425,6 +469,11 @@ args <code>ethapi.CallArgs</code>
                 },
                 "type": "array"
             },
+            "chainId": {
+                "pattern": "^0x[a-fA-F0-9]+$",
+                "title": "integer",
+                "type": "string"
+            },
             "data": {
                 "pattern": "^0x([a-fA-F\\d])+$",
                 "title": "dataWord",
@@ -443,6 +492,26 @@ args <code>ethapi.CallArgs</code>
             "gasPrice": {
                 "pattern": "^0x[a-fA-F0-9]+$",
                 "title": "integer",
+                "type": "string"
+            },
+            "input": {
+                "pattern": "^0x([a-fA-F\\d])+$",
+                "title": "dataWord",
+                "type": "string"
+            },
+            "maxFeePerGas": {
+                "pattern": "^0x[a-fA-F0-9]+$",
+                "title": "integer",
+                "type": "string"
+            },
+            "maxPriorityFeePerGas": {
+                "pattern": "^0x[a-fA-F0-9]+$",
+                "title": "integer",
+                "type": "string"
+            },
+            "nonce": {
+                "pattern": "^0x([a-fA-F\\d])+$",
+                "title": "uint64",
                 "type": "string"
             },
             "to": {
@@ -475,7 +544,7 @@ blockNrOrHash <code>rpc.BlockNumberOrHash</code>
 
 
 __3:__ 
-config <code>*TraceConfig</code> 
+config <code>*TraceCallConfig</code> 
 
   + Required: ✓ Yes
 
@@ -486,19 +555,60 @@ config <code>*TraceConfig</code>
 	
 	- additionalProperties: `false`
 	- properties: 
+		- BlockOverrides: 
+			- additionalProperties: `false`
+			- properties: 
+				- BaseFee: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- Coinbase: 
+					- pattern: `^0x[a-fA-F\d]{64}$`
+					- title: `keccak`
+					- type: `string`
+
+				- Difficulty: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- GasLimit: 
+					- pattern: `^0x([a-fA-F\d])+$`
+					- title: `uint64`
+					- type: `string`
+
+				- Number: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- Random: 
+					- pattern: `^0x[a-fA-F\d]{64}$`
+					- title: `keccak`
+					- type: `string`
+
+				- Time: 
+					- pattern: `^0x([a-fA-F\d])+$`
+					- title: `uint64`
+					- type: `string`
+
+
+			- type: `object`
+
 		- Debug: 
-			- type: `boolean`
-
-		- DisableMemory: 
-			- type: `boolean`
-
-		- DisableReturnData: 
 			- type: `boolean`
 
 		- DisableStack: 
 			- type: `boolean`
 
 		- DisableStorage: 
+			- type: `boolean`
+
+		- EnableMemory: 
+			- type: `boolean`
+
+		- EnableReturnData: 
 			- type: `boolean`
 
 		- Limit: 
@@ -514,10 +624,64 @@ config <code>*TraceConfig</code>
 			- title: `integer`
 			- type: `string`
 
+		- StateOverrides: 
+			- patternProperties: 
+				- .*: 
+					- additionalProperties: `false`
+					- properties: 
+						- balance: 
+							- pattern: `^0x[a-fA-F0-9]+$`
+							- title: `integer`
+							- type: `string`
+
+						- code: 
+							- pattern: `^0x([a-fA-F\d])+$`
+							- title: `dataWord`
+							- type: `string`
+
+						- nonce: 
+							- pattern: `^0x([a-fA-F\d])+$`
+							- title: `uint64`
+							- type: `string`
+
+						- state: 
+							- patternProperties: 
+								- .*: 
+									- description: `Hex representation of a Keccak 256 hash`
+									- pattern: `^0x[a-fA-F\d]{64}$`
+									- title: `keccak`
+									- type: `string`
+
+
+							- type: `object`
+
+						- stateDiff: 
+							- patternProperties: 
+								- .*: 
+									- description: `Hex representation of a Keccak 256 hash`
+									- pattern: `^0x[a-fA-F\d]{64}$`
+									- title: `keccak`
+									- type: `string`
+
+
+							- type: `object`
+
+
+					- type: `object`
+
+
+			- type: `object`
+
 		- Timeout: 
 			- type: `string`
 
 		- Tracer: 
+			- type: `string`
+
+		- TracerConfig: 
+			- media: 
+				- binaryEncoding: `base64`
+
 			- type: `string`
 
 		- overrides: 
@@ -535,19 +699,60 @@ config <code>*TraceConfig</code>
 	{
         "additionalProperties": false,
         "properties": {
+            "BlockOverrides": {
+                "additionalProperties": false,
+                "properties": {
+                    "BaseFee": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "Coinbase": {
+                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                        "title": "keccak",
+                        "type": "string"
+                    },
+                    "Difficulty": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "GasLimit": {
+                        "pattern": "^0x([a-fA-F\\d])+$",
+                        "title": "uint64",
+                        "type": "string"
+                    },
+                    "Number": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "Random": {
+                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                        "title": "keccak",
+                        "type": "string"
+                    },
+                    "Time": {
+                        "pattern": "^0x([a-fA-F\\d])+$",
+                        "title": "uint64",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
             "Debug": {
-                "type": "boolean"
-            },
-            "DisableMemory": {
-                "type": "boolean"
-            },
-            "DisableReturnData": {
                 "type": "boolean"
             },
             "DisableStack": {
                 "type": "boolean"
             },
             "DisableStorage": {
+                "type": "boolean"
+            },
+            "EnableMemory": {
+                "type": "boolean"
+            },
+            "EnableReturnData": {
                 "type": "boolean"
             },
             "Limit": {
@@ -563,10 +768,64 @@ config <code>*TraceConfig</code>
                 "title": "integer",
                 "type": "string"
             },
+            "StateOverrides": {
+                "patternProperties": {
+                    ".*": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "balance": {
+                                "pattern": "^0x[a-fA-F0-9]+$",
+                                "title": "integer",
+                                "type": "string"
+                            },
+                            "code": {
+                                "pattern": "^0x([a-fA-F\\d])+$",
+                                "title": "dataWord",
+                                "type": "string"
+                            },
+                            "nonce": {
+                                "pattern": "^0x([a-fA-F\\d])+$",
+                                "title": "uint64",
+                                "type": "string"
+                            },
+                            "state": {
+                                "patternProperties": {
+                                    ".*": {
+                                        "description": "Hex representation of a Keccak 256 hash",
+                                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                                        "title": "keccak",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "stateDiff": {
+                                "patternProperties": {
+                                    ".*": {
+                                        "description": "Hex representation of a Keccak 256 hash",
+                                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                                        "title": "keccak",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
             "Timeout": {
                 "type": "string"
             },
             "Tracer": {
+                "type": "string"
+            },
+            "TracerConfig": {
+                "media": {
+                    "binaryEncoding": "base64"
+                },
                 "type": "string"
             },
             "overrides": {
@@ -625,19 +884,20 @@ interface <code>interface{}</code>
 <details><summary>Source code</summary>
 <p>
 ```go
-func (api *TraceAPI) Call(ctx context.Context, args ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (interface{}, error) {
-	config = setTraceConfigDefaultTracer(config)
+func (api *TraceAPI) Call(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
+	config = setTraceCallConfigDefaultTracer(config)
 	res, err := api.debugAPI.TraceCall(ctx, args, blockNrOrHash, config)
 	if err != nil {
 		return nil, err
 	}
-	return decorateResponse(res, config)
+	traceConfig := getTraceConfigFromTraceCallConfig(config)
+	return decorateResponse(res, traceConfig)
 }// Call lets you trace a given eth_call. It collects the structured logs created during the execution of EVM
 // if the given transaction was added on top of the provided block and returns them as a JSON object.
 // You can provide -2 as a block number to trace on top of the pending block.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L240" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L262" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -658,7 +918,7 @@ Parameters must be given _by position_.
 
 
 __1:__ 
-txs <code>[]ethapi.CallArgs</code> 
+txs <code>[]ethapi.TransactionArgs</code> 
 
   + Required: ✓ Yes
 
@@ -694,6 +954,11 @@ txs <code>[]ethapi.CallArgs</code>
 
 					- type: `array`
 
+				- chainId: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
 				- data: 
 					- pattern: `^0x([a-fA-F\d])+$`
 					- title: `dataWord`
@@ -712,6 +977,26 @@ txs <code>[]ethapi.CallArgs</code>
 				- gasPrice: 
 					- pattern: `^0x[a-fA-F0-9]+$`
 					- title: `integer`
+					- type: `string`
+
+				- input: 
+					- pattern: `^0x([a-fA-F\d])+$`
+					- title: `dataWord`
+					- type: `string`
+
+				- maxFeePerGas: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- maxPriorityFeePerGas: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- nonce: 
+					- pattern: `^0x([a-fA-F\d])+$`
+					- title: `uint64`
 					- type: `string`
 
 				- to: 
@@ -764,6 +1049,11 @@ txs <code>[]ethapi.CallArgs</code>
                         },
                         "type": "array"
                     },
+                    "chainId": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
                     "data": {
                         "pattern": "^0x([a-fA-F\\d])+$",
                         "title": "dataWord",
@@ -782,6 +1072,26 @@ txs <code>[]ethapi.CallArgs</code>
                     "gasPrice": {
                         "pattern": "^0x[a-fA-F0-9]+$",
                         "title": "integer",
+                        "type": "string"
+                    },
+                    "input": {
+                        "pattern": "^0x([a-fA-F\\d])+$",
+                        "title": "dataWord",
+                        "type": "string"
+                    },
+                    "maxFeePerGas": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "maxPriorityFeePerGas": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "nonce": {
+                        "pattern": "^0x([a-fA-F\\d])+$",
+                        "title": "uint64",
                         "type": "string"
                     },
                     "to": {
@@ -819,7 +1129,7 @@ blockNrOrHash <code>rpc.BlockNumberOrHash</code>
 
 
 __3:__ 
-config <code>*TraceConfig</code> 
+config <code>*TraceCallConfig</code> 
 
   + Required: ✓ Yes
 
@@ -830,19 +1140,60 @@ config <code>*TraceConfig</code>
 	
 	- additionalProperties: `false`
 	- properties: 
+		- BlockOverrides: 
+			- additionalProperties: `false`
+			- properties: 
+				- BaseFee: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- Coinbase: 
+					- pattern: `^0x[a-fA-F\d]{64}$`
+					- title: `keccak`
+					- type: `string`
+
+				- Difficulty: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- GasLimit: 
+					- pattern: `^0x([a-fA-F\d])+$`
+					- title: `uint64`
+					- type: `string`
+
+				- Number: 
+					- pattern: `^0x[a-fA-F0-9]+$`
+					- title: `integer`
+					- type: `string`
+
+				- Random: 
+					- pattern: `^0x[a-fA-F\d]{64}$`
+					- title: `keccak`
+					- type: `string`
+
+				- Time: 
+					- pattern: `^0x([a-fA-F\d])+$`
+					- title: `uint64`
+					- type: `string`
+
+
+			- type: `object`
+
 		- Debug: 
-			- type: `boolean`
-
-		- DisableMemory: 
-			- type: `boolean`
-
-		- DisableReturnData: 
 			- type: `boolean`
 
 		- DisableStack: 
 			- type: `boolean`
 
 		- DisableStorage: 
+			- type: `boolean`
+
+		- EnableMemory: 
+			- type: `boolean`
+
+		- EnableReturnData: 
 			- type: `boolean`
 
 		- Limit: 
@@ -858,10 +1209,64 @@ config <code>*TraceConfig</code>
 			- title: `integer`
 			- type: `string`
 
+		- StateOverrides: 
+			- patternProperties: 
+				- .*: 
+					- additionalProperties: `false`
+					- properties: 
+						- balance: 
+							- pattern: `^0x[a-fA-F0-9]+$`
+							- title: `integer`
+							- type: `string`
+
+						- code: 
+							- pattern: `^0x([a-fA-F\d])+$`
+							- title: `dataWord`
+							- type: `string`
+
+						- nonce: 
+							- pattern: `^0x([a-fA-F\d])+$`
+							- title: `uint64`
+							- type: `string`
+
+						- state: 
+							- patternProperties: 
+								- .*: 
+									- description: `Hex representation of a Keccak 256 hash`
+									- pattern: `^0x[a-fA-F\d]{64}$`
+									- title: `keccak`
+									- type: `string`
+
+
+							- type: `object`
+
+						- stateDiff: 
+							- patternProperties: 
+								- .*: 
+									- description: `Hex representation of a Keccak 256 hash`
+									- pattern: `^0x[a-fA-F\d]{64}$`
+									- title: `keccak`
+									- type: `string`
+
+
+							- type: `object`
+
+
+					- type: `object`
+
+
+			- type: `object`
+
 		- Timeout: 
 			- type: `string`
 
 		- Tracer: 
+			- type: `string`
+
+		- TracerConfig: 
+			- media: 
+				- binaryEncoding: `base64`
+
 			- type: `string`
 
 		- overrides: 
@@ -879,19 +1284,60 @@ config <code>*TraceConfig</code>
 	{
         "additionalProperties": false,
         "properties": {
+            "BlockOverrides": {
+                "additionalProperties": false,
+                "properties": {
+                    "BaseFee": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "Coinbase": {
+                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                        "title": "keccak",
+                        "type": "string"
+                    },
+                    "Difficulty": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "GasLimit": {
+                        "pattern": "^0x([a-fA-F\\d])+$",
+                        "title": "uint64",
+                        "type": "string"
+                    },
+                    "Number": {
+                        "pattern": "^0x[a-fA-F0-9]+$",
+                        "title": "integer",
+                        "type": "string"
+                    },
+                    "Random": {
+                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                        "title": "keccak",
+                        "type": "string"
+                    },
+                    "Time": {
+                        "pattern": "^0x([a-fA-F\\d])+$",
+                        "title": "uint64",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
             "Debug": {
-                "type": "boolean"
-            },
-            "DisableMemory": {
-                "type": "boolean"
-            },
-            "DisableReturnData": {
                 "type": "boolean"
             },
             "DisableStack": {
                 "type": "boolean"
             },
             "DisableStorage": {
+                "type": "boolean"
+            },
+            "EnableMemory": {
+                "type": "boolean"
+            },
+            "EnableReturnData": {
                 "type": "boolean"
             },
             "Limit": {
@@ -907,10 +1353,64 @@ config <code>*TraceConfig</code>
                 "title": "integer",
                 "type": "string"
             },
+            "StateOverrides": {
+                "patternProperties": {
+                    ".*": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "balance": {
+                                "pattern": "^0x[a-fA-F0-9]+$",
+                                "title": "integer",
+                                "type": "string"
+                            },
+                            "code": {
+                                "pattern": "^0x([a-fA-F\\d])+$",
+                                "title": "dataWord",
+                                "type": "string"
+                            },
+                            "nonce": {
+                                "pattern": "^0x([a-fA-F\\d])+$",
+                                "title": "uint64",
+                                "type": "string"
+                            },
+                            "state": {
+                                "patternProperties": {
+                                    ".*": {
+                                        "description": "Hex representation of a Keccak 256 hash",
+                                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                                        "title": "keccak",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "stateDiff": {
+                                "patternProperties": {
+                                    ".*": {
+                                        "description": "Hex representation of a Keccak 256 hash",
+                                        "pattern": "^0x[a-fA-F\\d]{64}$",
+                                        "title": "keccak",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
             "Timeout": {
                 "type": "string"
             },
             "Tracer": {
+                "type": "string"
+            },
+            "TracerConfig": {
+                "media": {
+                    "binaryEncoding": "base64"
+                },
                 "type": "string"
             },
             "overrides": {
@@ -972,12 +1472,12 @@ interface <code>interface{}</code>
 func (api *TraceAPI) CallMany(ctx context.Context, txs [ // CallMany lets you trace a given eth_call. It collects the structured logs created during the execution of EVM
 // if the given transaction was added on top of the provided block and returns them as a JSON object.
 // You can provide -2 as a block number to trace on top of the pending block.
-]ethapi.CallArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceConfig) (interface{}, error) {
-	config = setTraceConfigDefaultTracer(config)
+]ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
+	config = setTraceCallConfigDefaultTracer(config)
 	return api.debugAPI.TraceCallMany(ctx, txs, blockNrOrHash, config)
 }
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L252" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L275" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -1106,16 +1606,16 @@ config <code>*TraceConfig</code>
 		- Debug: 
 			- type: `boolean`
 
-		- DisableMemory: 
-			- type: `boolean`
-
-		- DisableReturnData: 
-			- type: `boolean`
-
 		- DisableStack: 
 			- type: `boolean`
 
 		- DisableStorage: 
+			- type: `boolean`
+
+		- EnableMemory: 
+			- type: `boolean`
+
+		- EnableReturnData: 
 			- type: `boolean`
 
 		- Limit: 
@@ -1137,6 +1637,12 @@ config <code>*TraceConfig</code>
 		- Tracer: 
 			- type: `string`
 
+		- TracerConfig: 
+			- media: 
+				- binaryEncoding: `base64`
+
+			- type: `string`
+
 		- overrides: 
 			- additionalProperties: `true`
 
@@ -1155,16 +1661,16 @@ config <code>*TraceConfig</code>
             "Debug": {
                 "type": "boolean"
             },
-            "DisableMemory": {
-                "type": "boolean"
-            },
-            "DisableReturnData": {
-                "type": "boolean"
-            },
             "DisableStack": {
                 "type": "boolean"
             },
             "DisableStorage": {
+                "type": "boolean"
+            },
+            "EnableMemory": {
+                "type": "boolean"
+            },
+            "EnableReturnData": {
                 "type": "boolean"
             },
             "Limit": {
@@ -1184,6 +1690,12 @@ config <code>*TraceConfig</code>
                 "type": "string"
             },
             "Tracer": {
+                "type": "string"
+            },
+            "TracerConfig": {
+                "media": {
+                    "binaryEncoding": "base64"
+                },
                 "type": "string"
             },
             "overrides": {
@@ -1266,7 +1778,7 @@ func (api *TraceAPI) Filter(ctx context.Context, args TraceFilterArgs, config *T
 // per transaction, dependent on the requested tracer.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L227" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L249" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -1398,7 +1910,7 @@ func (sub *RPCTraceSubscription) Subscribe(subscriptionName RPCTraceSubscription
 // Subscriptions are not available over HTTP; they are only available over WS, IPC, and Process connections.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/node/openrpc.go#L269" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/node/openrpc.go#L267" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -1466,16 +1978,16 @@ config <code>*TraceConfig</code>
 		- Debug: 
 			- type: `boolean`
 
-		- DisableMemory: 
-			- type: `boolean`
-
-		- DisableReturnData: 
-			- type: `boolean`
-
 		- DisableStack: 
 			- type: `boolean`
 
 		- DisableStorage: 
+			- type: `boolean`
+
+		- EnableMemory: 
+			- type: `boolean`
+
+		- EnableReturnData: 
 			- type: `boolean`
 
 		- Limit: 
@@ -1497,6 +2009,12 @@ config <code>*TraceConfig</code>
 		- Tracer: 
 			- type: `string`
 
+		- TracerConfig: 
+			- media: 
+				- binaryEncoding: `base64`
+
+			- type: `string`
+
 		- overrides: 
 			- additionalProperties: `true`
 
@@ -1515,16 +2033,16 @@ config <code>*TraceConfig</code>
             "Debug": {
                 "type": "boolean"
             },
-            "DisableMemory": {
-                "type": "boolean"
-            },
-            "DisableReturnData": {
-                "type": "boolean"
-            },
             "DisableStack": {
                 "type": "boolean"
             },
             "DisableStorage": {
+                "type": "boolean"
+            },
+            "EnableMemory": {
+                "type": "boolean"
+            },
+            "EnableReturnData": {
                 "type": "boolean"
             },
             "Limit": {
@@ -1544,6 +2062,12 @@ config <code>*TraceConfig</code>
                 "type": "string"
             },
             "Tracer": {
+                "type": "string"
+            },
+            "TracerConfig": {
+                "media": {
+                    "binaryEncoding": "base64"
+                },
                 "type": "string"
             },
             "overrides": {
@@ -1609,7 +2133,7 @@ func (api *TraceAPI) Transaction(ctx context.Context, hash common.Hash, config *
 // and returns them as a JSON object.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L219" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/eth/tracers/api_parity.go#L241" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -1700,7 +2224,7 @@ func (sub *RPCTraceSubscription) Unsubscribe(id rpc.ID) error {
 }// Unsubscribe terminates an existing subscription by ID.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/node/openrpc.go#L260" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/node/openrpc.go#L258" target="_">View on GitHub →</a>
 </p>
 </details>
 

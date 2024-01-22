@@ -7,7 +7,7 @@
 
 | Entity | Version |
 | --- | --- |
-| Source | <code>1.11.23-unstable/generated-at:2021-04-30T19:24:24+03:00</code> |
+| Source | <code>1.12.14-unstable/generated-at:2023-09-04T08:02:34-06:00</code> |
 | OpenRPC | <code>1.2.6</code> |
 
 ---
@@ -97,7 +97,7 @@ func (api *API) GetHashrate() uint64 {
 }// GetHashrate returns the current hashrate for local CPU miner and remote miner.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L110" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L111" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -110,10 +110,11 @@ func (api *API) GetHashrate() uint64 {
 GetWork returns a work package for external miner.
 
 The work package consists of 3 strings:
-  result[0] - 32 bytes hex encoded current block header pow-hash
-  result[1] - 32 bytes hex encoded seed hash used for DAG
-  result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-  result[3] - hex encoded block number
+
+	result[0] - 32 bytes hex encoded current block header pow-hash
+	result[1] - 32 bytes hex encoded seed hash used for DAG
+	result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+	result[3] - hex encoded block number
 
 
 #### Params (0)
@@ -219,13 +220,14 @@ func (api *API) GetWork() ([4]string, error) {
 }// GetWork returns a work package for external miner.
 //
 // The work package consists of 3 strings:
-//   result[0] - 32 bytes hex encoded current block header pow-hash
-//   result[1] - 32 bytes hex encoded seed hash used for DAG
-//   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-//   result[3] - hex encoded block number
+//
+//	result[0] - 32 bytes hex encoded current block header pow-hash
+//	result[1] - 32 bytes hex encoded seed hash used for DAG
+//	result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+//	result[3] - hex encoded block number
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L41" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L42" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -233,7 +235,7 @@ func (api *API) GetWork() ([4]string, error) {
 
 
 
-### ethash_submitHashRate
+### ethash_submitHashrate
 
 SubmitHashrate can be used for remote miners to submit their hash rate.
 This enables the node to report the combined hash rate of all miners
@@ -335,7 +337,7 @@ id <code>common.Hash</code>
 === "Shell HTTP"
 
 	``` shell
-	curl -X POST -H "Content-Type: application/json" http://localhost:8545 --data '{"jsonrpc": "2.0", "id": 42, "method": "ethash_submitHashRate", "params": [<rate>, <id>]}'
+	curl -X POST -H "Content-Type: application/json" http://localhost:8545 --data '{"jsonrpc": "2.0", "id": 42, "method": "ethash_submitHashrate", "params": [<rate>, <id>]}'
 	```
 
 
@@ -345,14 +347,14 @@ id <code>common.Hash</code>
 === "Shell WebSocket"
 
 	``` shell
-	wscat -c ws://localhost:8546 -x '{"jsonrpc": "2.0", "id": 1, "method": "ethash_submitHashRate", "params": [<rate>, <id>]}'
+	wscat -c ws://localhost:8546 -x '{"jsonrpc": "2.0", "id": 1, "method": "ethash_submitHashrate", "params": [<rate>, <id>]}'
 	```
 
 
 === "Javascript Console"
 
 	``` js
-	ethash.submitHashRate(rate,id);
+	ethash.submitHashrate(rate,id);
 	```
 
 
@@ -360,7 +362,7 @@ id <code>common.Hash</code>
 <details><summary>Source code</summary>
 <p>
 ```go
-func (api *API) SubmitHashRate(rate hexutil.Uint64, id common.Hash) bool {
+func (api *API) SubmitHashrate(rate hexutil.Uint64, id common.Hash) bool {
 	if api.ethash.remote == nil {
 		return false
 	}
@@ -380,7 +382,7 @@ func (api *API) SubmitHashRate(rate hexutil.Uint64, id common.Hash) bool {
 // between nodes.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L92" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L93" target="_">View on GitHub →</a>
 </p>
 </details>
 
@@ -563,7 +565,7 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 // Note either an invalid solution, a stale work a non-existent work will return false.
 
 ```
-<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L66" target="_">View on GitHub →</a>
+<a href="https://github.com/etclabscore/core-geth/blob/master/consensus/ethash/api.go#L67" target="_">View on GitHub →</a>
 </p>
 </details>
 

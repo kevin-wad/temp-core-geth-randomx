@@ -28,7 +28,6 @@ Networks supported by the respective go-ethereum packaged `geth` program.
 |        | :zap:             | Ropsten (Geth+Parity ETH PoW Testnet) | :heavy_check_mark:                                       | :heavy_check_mark:   |
 |        | :handshake:       | Rinkeby (Geth-only ETH PoA Testnet)   | :heavy_check_mark:                                       | :heavy_check_mark:   |
 |        | :handshake:       | Goerli (Geth+Parity ETH PoA Testnet)  | :heavy_check_mark:                                       | :heavy_check_mark:   |
-|        | :handshake:       | Kotti (Geth+Parity ETC PoA Testnet)   | :heavy_check_mark:                                       |                      |
 |        | :handshake:       | Kovan (Parity-only ETH PoA Testnet)   |                                                          |                      |
 |        |                   | Tobalaba (EWF Testnet)                |                                                          |                      |
 |        |                   | Ephemeral development PoA network     | :heavy_check_mark:                                       | :heavy_check_mark:   |
@@ -50,7 +49,7 @@ Ellaism users are asked to switch to
 
 - CoreGeth documentation is available [here](https://etclabscore.github.io/core-geth).
   + Getting Started [Installation](https://etclabscore.github.io/core-geth/getting-started/installation) and [CLI](https://etclabscore.github.io/core-geth/getting-started/run-cli)
-  + [JSONRPC API](https://etclabscore.github.io/core-geth/apis/jsonrpc-apis)
+  + [JSONRPC API](https://etclabscore.github.io/core-geth/JSON-RPC-API)
   + [Developers](https://etclabscore.github.io/core-geth/developers/build-from-source)
   + [Tutorials](https://etclabscore.github.io/core-geth/tutorials/private-network)
 - Further [ethereum/go-ethereum](https://github.com/ethereum/go-ethereum) documentation about can be found [here](https://geth.ethereum.org/docs/).

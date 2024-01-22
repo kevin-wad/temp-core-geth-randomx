@@ -27,10 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/types/genesisT"
 	"github.com/ethereum/go-ethereum/params/vars"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {
@@ -53,10 +53,10 @@ func verifyUnbrokenCanonchain(hc *HeaderChain) error {
 	return nil
 }
 
-func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus WriteStatus, wantErr error) {
+func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus WriteStatus, wantErr error, forker *ForkChoice) {
 	t.Helper()
 
-	status, err := hc.InsertHeaderChain(chain, time.Now())
+	status, err := hc.InsertHeaderChain(chain, time.Now(), forker)
 	if status != wantStatus {
 		t.Errorf("wrong write status from InsertHeaderChain: got %v, want %v", status, wantStatus)
 	}
@@ -72,48 +72,48 @@ func testInsert(t *testing.T, hc *HeaderChain, chain []*types.Header, wantStatus
 // This test checks status reporting of InsertHeaderChain.
 func TestHeaderInsertion(t *testing.T) {
 	var (
-		db      = rawdb.NewMemoryDatabase()
-		gspec   = &genesisT.Genesis{BaseFee: big.NewInt(vars.InitialBaseFee)}
-		genesis = MustCommitGenesis(db, gspec)
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &genesisT.Genesis{BaseFee: big.NewInt(vars.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
+	CommitGenesis(gspec, db, trie.NewDatabase(db))
 
-	hc, err := NewHeaderChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), func() bool { return false })
+	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
 		t.Fatal(err)
 	}
 	// chain A: G->A1->A2...A128
-	chainA := makeHeaderChain(genesis.Header(), 128, ethash.NewFaker(), db, 10)
-	// chain B: G->A1->B2...B128
-	chainB := makeHeaderChain(chainA[0], 128, ethash.NewFaker(), db, 10)
-	log.Root().SetHandler(log.StdoutHandler)
+	genDb, chainA := makeHeaderChainWithGenesis(gspec, 128, ethash.NewFaker(), 10)
+	// chain B: G->A1->B1...B128
+	chainB := makeHeaderChain(gspec.Config, chainA[0], 128, ethash.NewFaker(), genDb, 10)
 
+	forker := NewForkChoice(hc, nil)
 	// Inserting 64 headers on an empty chain, expecting
 	// 1 callbacks, 1 canon-status, 0 sidestatus,
-	testInsert(t, hc, chainA[:64], CanonStatTy, nil)
+	testInsert(t, hc, chainA[:64], CanonStatTy, nil, forker)
 
 	// Inserting 64 identical headers, expecting
 	// 0 callbacks, 0 canon-status, 0 sidestatus,
-	testInsert(t, hc, chainA[:64], NonStatTy, nil)
+	testInsert(t, hc, chainA[:64], NonStatTy, nil, forker)
 
 	// Inserting the same some old, some new headers
 	// 1 callbacks, 1 canon, 0 side
-	testInsert(t, hc, chainA[32:96], CanonStatTy, nil)
+	testInsert(t, hc, chainA[32:96], CanonStatTy, nil, forker)
 
 	// Inserting side blocks, but not overtaking the canon chain
-	testInsert(t, hc, chainB[0:32], SideStatTy, nil)
+	testInsert(t, hc, chainB[0:32], SideStatTy, nil, forker)
 
 	// Inserting more side blocks, but we don't have the parent
-	testInsert(t, hc, chainB[34:36], NonStatTy, consensus.ErrUnknownAncestor)
+	testInsert(t, hc, chainB[34:36], NonStatTy, consensus.ErrUnknownAncestor, forker)
 
 	// Inserting more sideblocks, overtaking the canon chain
-	testInsert(t, hc, chainB[32:97], CanonStatTy, nil)
+	testInsert(t, hc, chainB[32:97], CanonStatTy, nil, forker)
 
 	// Inserting more A-headers, taking back the canonicality
-	testInsert(t, hc, chainA[90:100], CanonStatTy, nil)
+	testInsert(t, hc, chainA[90:100], CanonStatTy, nil, forker)
 
 	// And B becomes canon again
-	testInsert(t, hc, chainB[97:107], CanonStatTy, nil)
+	testInsert(t, hc, chainB[97:107], CanonStatTy, nil, forker)
 
 	// And B becomes even longer
-	testInsert(t, hc, chainB[107:128], CanonStatTy, nil)
+	testInsert(t, hc, chainB[107:128], CanonStatTy, nil, forker)
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,11 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -242,6 +244,7 @@ func newTestClientHandler(backend *backends.SimulatedBackend, odr *LesOdr, index
 		engine:     engine,
 		blockchain: chain,
 		eventMux:   evmux,
+		merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 	}
 	client.handler = newClientHandler(ulcServers, ulcFraction, nil, client)
 
@@ -270,9 +273,12 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepare(blocks, simulation)
 
-	txpoolConfig := core.DefaultTxPoolConfig
+	txpoolConfig := legacypool.DefaultConfig
 	txpoolConfig.Journal = ""
-	txpool := core.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
+
+	pool := legacypool.New(txpoolConfig, simulation.Blockchain())
+	txpool, _ := txpool.New(new(big.Int).SetUint64(txpoolConfig.PriceLimit), simulation.Blockchain(), []txpool.SubPool{pool})
+
 	if indexers != nil {
 		checkpointConfig := &ctypes.CheckpointOracleConfig{
 			Address:   crypto.CreateAddress(bankAddr, 0),
@@ -357,7 +363,7 @@ func (p *testPeer) handshakeWithServer(t *testing.T, td *big.Int, head common.Ha
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
+	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
 }
@@ -390,7 +396,7 @@ func (p *testPeer) handshakeWithClient(t *testing.T, td *big.Int, head common.Ha
 	if err := p2p.ExpectMsg(p.app, StatusMsg, nil); err != nil {
 		t.Fatalf("status recv: %v", err)
 	}
-	if err := p2p.Send(p.app, StatusMsg, sendList); err != nil {
+	if err := p2p.Send(p.app, StatusMsg, &sendList); err != nil {
 		t.Fatalf("status send: %v", err)
 	}
 }
@@ -401,7 +407,7 @@ func (p *testPeer) close() {
 	p.app.Close()
 }
 
-func newTestPeerPair(name string, version int, server *serverHandler, client *clientHandler) (*testPeer, *testPeer, error) {
+func newTestPeerPair(name string, version int, server *serverHandler, client *clientHandler, noInitAnnounce bool) (*testPeer, *testPeer, error) {
 	// Create a message pipe to communicate through
 	app, net := p2p.MsgPipe()
 
@@ -426,19 +432,19 @@ func newTestPeerPair(name string, version int, server *serverHandler, client *cl
 		select {
 		case <-client.closeCh:
 			errc2 <- p2p.DiscQuitting
-		case errc2 <- client.handle(peer2):
+		case errc2 <- client.handle(peer2, noInitAnnounce):
 		}
 	}()
 	// Ensure the connection is established or exits when any error occurs
 	for {
 		select {
 		case err := <-errc1:
-			return nil, nil, fmt.Errorf("Failed to establish protocol connection %v", err)
+			return nil, nil, fmt.Errorf("failed to establish protocol connection %v", err)
 		case err := <-errc2:
-			return nil, nil, fmt.Errorf("Failed to establish protocol connection %v", err)
+			return nil, nil, fmt.Errorf("failed to establish protocol connection %v", err)
 		default:
 		}
-		if atomic.LoadUint32(&peer1.serving) == 1 && atomic.LoadUint32(&peer2.serving) == 1 {
+		if peer1.serving.Load() && peer2.serving.Load() {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -476,7 +482,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 		select {
 		case <-client.handler.closeCh:
 			errCh <- p2p.DiscQuitting
-		case errCh <- client.handler.handle(peer):
+		case errCh <- client.handler.handle(peer, false):
 		}
 	}()
 	tp := &testPeer{
@@ -489,7 +495,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 		head    = client.handler.backend.blockchain.CurrentHeader()
 		td      = client.handler.backend.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+	forkID := forkid.NewID(client.handler.backend.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithClient(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID, testCostList(0), recentTxLookup) // disable flow control by default
 
 	// Ensure the connection is established or exits when any error occurs
@@ -499,7 +505,7 @@ func (client *testClient) newRawPeer(t *testing.T, name string, version int, rec
 			return nil, nil, nil
 		default:
 		}
-		if atomic.LoadUint32(&peer.serving) == 1 {
+		if peer.serving.Load() {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -553,7 +559,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 		head    = server.handler.blockchain.CurrentHeader()
 		td      = server.handler.blockchain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64())
+	forkID := forkid.NewID(server.handler.blockchain.Config(), genesis.Hash(), head.Number.Uint64(), head.Time)
 	tp.handshakeWithServer(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash(), forkID)
 
 	// Ensure the connection is established or exits when any error occurs
@@ -563,7 +569,7 @@ func (server *testServer) newRawPeer(t *testing.T, name string, version int) (*t
 			return nil, nil, nil
 		default:
 		}
-		if atomic.LoadUint32(&peer.serving) == 1 {
+		if peer.serving.Load() {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -626,7 +632,7 @@ func newClientServerEnv(t *testing.T, config testnetConfig) (*testServer, *testC
 	if config.connect {
 		done := make(chan struct{})
 		client.syncEnd = func(_ *types.Header) { close(done) }
-		cpeer, speer, err = newTestPeerPair("peer", config.protocol, server, client)
+		cpeer, speer, err = newTestPeerPair("peer", config.protocol, server, client, false)
 		if err != nil {
 			t.Fatalf("Failed to connect testing peers %v", err)
 		}

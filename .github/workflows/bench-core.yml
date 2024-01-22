@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: 'ethereum/go-ethereum'
-          ref: 'v1.9.25'
+          ref: 'v1.10.26'
 
       - name: Benchmark ethereum/go-ethereum
         id: bench
@@ -73,9 +73,7 @@ jobs:
 
       - name: Get dependencies
         run: |
-          cd ..
-          go get golang.org/x/perf/cmd/...
-          cd -
+          go install golang.org/x/perf/cmd/benchstat@latest
 
       - uses: actions/download-artifact@v2
         name: Get go-ethereum artifact
@@ -89,8 +87,8 @@ jobs:
 
       - name: "Analyze Results [COMPRESSED]"
         run: |
-          benchstat --geomean go-ethereum.txt core-geth.txt
+          benchstat go-ethereum.txt core-geth.txt
 
       - name: "Analyze Results [RAW DELTA]"
         run: |
-          benchstat --geomean --delta-test=none go-ethereum.txt core-geth.txt
+          benchstat go-ethereum.txt core-geth.txt

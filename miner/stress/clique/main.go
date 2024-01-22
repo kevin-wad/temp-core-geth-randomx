@@ -20,16 +20,17 @@ package main
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -57,14 +58,18 @@ func main() {
 	for i := 0; i < len(sealers); i++ {
 		sealers[i], _ = crypto.GenerateKey()
 	}
-	// Create a Clique network based off of the Rinkeby config
+	// Create a Clique network based off of the Sepolia config
 	genesis := makeGenesis(faucets, sealers)
 
+	// Handle interrupts.
+	interruptCh := make(chan os.Signal, 5)
+	signal.Notify(interruptCh, os.Interrupt)
+
 	var (
+		stacks []*node.Node
 		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
-
 	for _, sealer := range sealers {
 		// Start the node and wait until it's up
 		stack, ethBackend, err := makeSealer(genesis)
@@ -81,18 +86,20 @@ func main() {
 			stack.Server().AddPeer(n)
 		}
 		// Start tracking the node and its enode
+		stacks = append(stacks, stack)
 		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
 
 		// Inject the signer key and start sealing with it
-		store := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-		signer, err := store.ImportECDSA(sealer, "")
+		ks := keystore.NewKeyStore(stack.KeyStoreDir(), keystore.LightScryptN, keystore.LightScryptP)
+		signer, err := ks.ImportECDSA(sealer, "")
 		if err != nil {
 			panic(err)
 		}
-		if err := store.Unlock(signer, ""); err != nil {
+		if err := ks.Unlock(signer, ""); err != nil {
 			panic(err)
 		}
+		stack.AccountManager().AddBackend(ks)
 	}
 
 	// Iterate over all the nodes and start signing on them
@@ -107,6 +114,16 @@ func main() {
 	// Start injecting transactions from the faucet like crazy
 	nonces := make([]uint64, len(faucets))
 	for {
+		// Stop when interrupted.
+		select {
+		case <-interruptCh:
+			for _, node := range stacks {
+				node.Close()
+			}
+			return
+		default:
+		}
+
 		// Pick a random signer node
 		index := rand.Intn(len(faucets))
 		backend := nodes[index%len(nodes)]
@@ -116,7 +133,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if err := backend.TxPool().AddLocal(tx); err != nil {
+		if err := backend.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, true, false); err != nil {
 			panic(err)
 		}
 		nonces[index]++
@@ -132,7 +149,7 @@ func main() {
 // signer and faucet accounts.
 func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *genesisT.Genesis {
 	// Create a Clique network based off of the Rinkeby config
-	genesis := params.DefaultRinkebyGenesisBlock()
+	genesis := params.DefaultSepoliaGenesisBlock()
 	genesis.GasLimit = 25000000
 
 	genesis.SetChainID(big.NewInt(18))
@@ -167,7 +184,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *gene
 
 func makeSealer(genesis *genesisT.Genesis) (*node.Node, *eth.Ethereum, error) {
 	// Define the basic configurations for the Ethereum node
-	datadir, _ := ioutil.TempDir("", "")
+	datadir, _ := os.MkdirTemp("", "")
 
 	config := &node.Config{
 		Name:    "geth",
@@ -191,7 +208,7 @@ func makeSealer(genesis *genesisT.Genesis) (*node.Node, *eth.Ethereum, error) {
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
-		TxPool:          core.DefaultTxPoolConfig,
+		TxPool:          legacypool.DefaultConfig,
 		GPO:             ethconfig.Defaults.GPO,
 		Miner: miner.Config{
 			GasCeil:  genesis.GasLimit * 11 / 10,

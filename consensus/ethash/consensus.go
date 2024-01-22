@@ -24,11 +24,12 @@ import (
 	"runtime"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -181,7 +182,7 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		return nil
 	}
 	// Gather the set of past uncles and ancestors
-	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
+	uncles, ancestors := mapset.NewSet[common.Hash](), make(map[common.Hash]*types.Header)
 
 	number, parent := block.NumberU64()-1, block.ParentHash()
 	for i := 0; i < 7; i++ {
@@ -253,9 +254,8 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
 	// Verify that the gas limit is <= 2^63-1
-	cap := uint64(0x7fffffffffffffff)
-	if header.GasLimit > cap {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
+	if header.GasLimit > vars.MaxGasLimit {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, vars.MaxGasLimit)
 	}
 	// Verify that the gasUsed is <= gasLimit
 	if header.GasUsed > header.GasLimit {
@@ -270,7 +270,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
 			return err
 		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -278,6 +278,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
+
 	// Verify the engine specific seal securing the block
 	if seal {
 		if err := ethash.verifySeal(chain, header, false); err != nil {
@@ -286,9 +287,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// If all checks passed, validate any special fields for hard forks
 	if err := mutations.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
-		return err
-	}
-	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
 	return nil
@@ -318,9 +316,10 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 	next := new(big.Int).Add(parent.Number, big1)
 	out := new(big.Int)
 
-	if config.IsEnabled(config.GetCatalystTransition, next) {
-		return big.NewInt(1)
-	}
+	// TODO (meowbits): do we need this?
+	// if config.IsEnabled(config.GetEthashTerminalTotalDifficulty, next) {
+	// 	return big.NewInt(1)
+	// }
 
 	// ADJUSTMENT algorithms
 	if config.IsEnabled(config.GetEthashEIP100BTransition, next) {
@@ -339,7 +338,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 		out.Set(math.BigMax(out, bigMinus99))
 		out.Mul(parent_diff_over_dbd(parent), out)
 		out.Add(out, parent.Difficulty)
-
 	} else if config.IsEnabled(config.GetEIP2Transition, next) {
 		// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.md
 		// algorithm:
@@ -351,7 +349,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 		out.Set(math.BigMax(out, bigMinus99))
 		out.Mul(parent_diff_over_dbd(parent), out)
 		out.Add(out, parent.Difficulty)
-
 	} else {
 		// FRONTIER
 		// algorithm:
@@ -382,7 +379,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 
 	if config.IsEnabled(config.GetEthashECIP1010PauseTransition, next) {
 		ecip1010Explosion(config, next, exPeriodRef)
-
 	} else if len(config.GetEthashDifficultyBombDelaySchedule()) > 0 {
 		// This logic varies from the original fork-based logic (below) in that
 		// configured delay values are treated as compounding values (-2000000 + -3000000 = -5000000@constantinople)
@@ -396,7 +392,24 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 			fakeBlockNumber.Sub(fakeBlockNumber, dur)
 		}
 		exPeriodRef.Set(fakeBlockNumber)
-
+	} else if config.IsEnabled(config.GetEthashEIP5133Transition, next) {
+		// calcDifficultyEip4345 is the difficulty adjustment algorithm as specified by EIP 4345.
+		// It offsets the bomb a total of 10.7M blocks.
+		fakeBlockNumber := new(big.Int)
+		delayWithOffset := new(big.Int).Sub(vars.EIP5133DifficultyBombDelay, common.Big1)
+		if parent.Number.Cmp(delayWithOffset) >= 0 {
+			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, delayWithOffset)
+		}
+		exPeriodRef.Set(fakeBlockNumber)
+	} else if config.IsEnabled(config.GetEthashEIP4345Transition, next) {
+		// calcDifficultyEip4345 is the difficulty adjustment algorithm as specified by EIP 4345.
+		// It offsets the bomb a total of 10.7M blocks.
+		fakeBlockNumber := new(big.Int)
+		delayWithOffset := new(big.Int).Sub(vars.EIP4345DifficultyBombDelay, common.Big1)
+		if parent.Number.Cmp(delayWithOffset) >= 0 {
+			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, delayWithOffset)
+		}
+		exPeriodRef.Set(fakeBlockNumber)
 	} else if config.IsEnabled(config.GetEthashEIP3554Transition, next) {
 		// calcDifficultyEIP3554 is the difficulty adjustment algorithm for London (December 2021).
 		// The calculation uses the Byzantium rules, but with bomb offset 9.7M.
@@ -406,7 +419,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, delayWithOffset)
 		}
 		exPeriodRef.Set(fakeBlockNumber)
-
 	} else if config.IsEnabled(config.GetEthashEIP2384Transition, next) {
 		// calcDifficultyEIP2384 is the difficulty adjustment algorithm for Muir Glacier.
 		// The calculation uses the Byzantium rules, but with bomb offset 9M.
@@ -416,7 +428,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, delayWithOffset)
 		}
 		exPeriodRef.Set(fakeBlockNumber)
-
 	} else if config.IsEnabled(config.GetEthashEIP1234Transition, next) {
 		// calcDifficultyEIP1234 is the difficulty adjustment algorithm for Constantinople.
 		// The calculation uses the Byzantium rules, but with bomb offset 5M.
@@ -432,7 +443,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, delayWithOffset)
 		}
 		exPeriodRef.Set(fakeBlockNumber)
-
 	} else if config.IsEnabled(config.GetEthashEIP649Transition, next) {
 		// The calculation uses the Byzantium rules, with bomb offset of 3M.
 		// Specification EIP-649: https://eips.ethereum.org/EIPS/eip-649
@@ -446,7 +456,6 @@ func CalcDifficulty(config ctypes.ChainConfigurator, time uint64, parent *types.
 			fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, delayWithOffset)
 		}
 		exPeriodRef.Set(fakeBlockNumber)
-
 	}
 
 	// EXPLOSION
@@ -476,8 +485,8 @@ var (
 )
 
 // Exported for fuzzing
-var FrontierDifficultyCalulator = CalcDifficultyFrontierU256
-var HomesteadDifficultyCalulator = CalcDifficultyHomesteadU256
+var FrontierDifficultyCalculator = CalcDifficultyFrontierU256
+var HomesteadDifficultyCalculator = CalcDifficultyHomesteadU256
 var DynamicDifficultyCalculator = MakeDifficultyCalculatorU256
 
 // verifySeal checks whether a block satisfies the PoW difficulty requirements,
@@ -558,19 +567,23 @@ func (ethash *Ethash) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	return nil
 }
 
-// Finalize implements consensus.Engine, accumulating the block and uncle rewards,
-// setting the final state on the header
-func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+// Finalize implements consensus.Engine, accumulating the block and uncle rewards.
+func (ethash *Ethash) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, withdrawals []*types.Withdrawal) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	mutations.AccumulateRewards(chain.Config(), state, header, uncles)
-	header.Root = state.IntermediateRoot(chain.Config().IsEnabled(chain.Config().GetEIP161dTransition, header.Number))
 }
 
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
-func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error) {
+	if len(withdrawals) > 0 {
+		return nil, errors.New("ethash does not support withdrawals")
+	}
 	// Finalize block
-	ethash.Finalize(chain, header, state, txs, uncles)
+	ethash.Finalize(chain, header, state, txs, uncles, nil)
+
+	// Assign the final state root to header.
+	header.Root = state.IntermediateRoot(chain.Config().IsEnabled(chain.Config().GetEIP161dTransition, header.Number))
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
@@ -597,6 +610,9 @@ func (ethash *Ethash) SealHash(header *types.Header) (hash common.Hash) {
 	}
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
+	}
+	if header.WithdrawalsHash != nil {
+		panic("withdrawal hash set on ethash")
 	}
 	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
