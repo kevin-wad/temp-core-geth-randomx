@@ -47,7 +47,7 @@ var (
 	GasLimitBoundDivisor uint64 = 1024  // The bound divisor of the gas limit, used in update calculations.
 	MinGasLimit          uint64 = 5000  // Minimum the gas limit may ever be.
 	MaximumExtraDataSize uint64 = 32    // Maximum size extra data may be after Genesis.
-	MaxCodeSize          uint64 = 24576 // Maximum bytecode to permit for a contract
+	MaxCodeSize          uint64 = 41000 // Maximum bytecode to permit for a contract, (Eticav2 is 30000 size, 40k avoids need to hardfork before future Etica contracts deployments)
 )
 
 var (
