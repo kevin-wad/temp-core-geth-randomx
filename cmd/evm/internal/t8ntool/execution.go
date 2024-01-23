@@ -185,6 +185,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig ctypes.ChainConfigura
 			mutations.ApplyDAOHardFork(statedb)
 		}
 	}
+	// Handle Etica SmartContract v2 Hardfork
+	isEticaSmartContractv2Support := chainConfig.IsEnabled(chainConfig.GetEticaSmartContractv2Transition, new(big.Int).SetUint64(pre.Env.Number))
+	if isEticaSmartContractv2Support {
+		if Eticav2Number := chainConfig.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == pre.Env.Number {
+			mutations.ApplyEticav2(statedb)
+		}
+	}
+
 	var blobGasUsed uint64
 	for i, tx := range txs {
 		if tx.Type() == types.BlobTxType && vmContext.ExcessBlobGas == nil {

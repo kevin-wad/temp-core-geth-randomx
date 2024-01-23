@@ -312,9 +312,19 @@ func GenerateChain(config ctypes.ChainConfigurator, parent *types.Block, engine 
 				}
 			}
 		}
+		if eticav2Block := config.GetEticaSmartContractv2Transition(); eticav2Block != nil {
+			eticav2limit := new(big.Int).Add(new(big.Int).SetUint64(*eticav2Block), vars.Eticav2ForkExtraRange)
+			if b.header.Number.Uint64() >= *eticav2Block && b.header.Number.Cmp(eticav2limit) < 0 {
+					b.header.Extra = common.CopyBytes(vars.Eticav2ForkBlockExtra)
+			}
+		}
 		if generic.AsGenericCC(config).DAOSupport() && config.GetEthashEIP779Transition() != nil && *config.GetEthashEIP779Transition() == b.header.Number.Uint64() {
 			mutations.ApplyDAOHardFork(statedb)
 		}
+		if config.GetEticaSmartContractv2Transition() != nil && *config.GetEticaSmartContractv2Transition() == b.header.Number.Uint64() {
+			mutations.ApplyEticav2(statedb)
+		}
+		
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)

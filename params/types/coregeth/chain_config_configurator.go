@@ -1313,3 +1313,13 @@ func (c *CoreGethChainConfig) SetLyra2NonceTransition(n *uint64) error {
 
 	return nil
 }
+
+
+func (c *CoreGethChainConfig) GetEticaSmartContractv2Transition() *uint64 {
+	return bigNewU64(c.EticaSmartContractv2)
+}
+
+func (c *CoreGethChainConfig) SetEticaSmartContractv2Transition(n *uint64) error {
+	c.EticaSmartContractv2 = setBig(c.EticaSmartContractv2, n)
+	return nil
+}

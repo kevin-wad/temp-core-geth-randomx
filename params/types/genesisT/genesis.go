@@ -1050,3 +1050,11 @@ func (g *Genesis) String() string {
 	j, _ := json.MarshalIndent(g, "", "    ")
 	return "Genesis: " + string(j)
 }
+
+func (g *Genesis) GetEticaSmartContractv2Transition() *uint64 {
+	return g.Config.GetEticaSmartContractv2Transition()
+}
+
+func (g *Genesis) SetEticaSmartContractv2Transition(n *uint64) error {
+	return g.Config.SetEticaSmartContractv2Transition(n)
+}

@@ -289,6 +289,9 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if err := mutations.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
 		return err
 	}
+	if err := mutations.VerifyEticav2HeaderExtraData(chain.Config(), header); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -35,6 +35,14 @@ var (
 	// ErrBadNoDAOExtra is returned if a header does support the DAO fork on a no-
 	// fork client.
 	ErrBadNoDAOExtra = errors.New("bad DAO no-fork extra-data")
+
+	// ErrBadProEticav2Extra is returned if a header doesn't support the Eticav2 fork on a
+	// pro-fork client.
+	ErrBadProEticav2Extra = errors.New("bad Eticav2 pro-fork extra-data")
+
+	// ErrBadNoEticav2Extra is returned if a header does support the Eticav2 fork on a no-
+	// fork client.
+	ErrBadNoEticav2Extra = errors.New("bad DAO no-fork extra-data")
 )
 
 // VerifyDAOHeaderExtraData validates the extra-data field of a block header to
@@ -113,4 +121,40 @@ func ApplyDAOHardFork(statedb *state.StateDB) {
 		statedb.AddBalance(vars.DAORefundContract, statedb.GetBalance(addr))
 		statedb.SetBalance(addr, new(big.Int))
 	}
+}
+
+
+// VerifyEticav2HeaderExtraData validates the extra-data field of a block header to
+// ensure it conforms to Eticav2 hard-fork rules.
+//
+// Eticav2 hard-fork extension to the header validity:
+//
+//   - if the node is no-fork, do not accept blocks in the [fork, fork+10) range
+//     with the fork specific extra-data set.
+//   - if the node is pro-fork, require blocks in the specific range to have the
+//     unique extra-data set.
+func VerifyEticav2HeaderExtraData(config ctypes.ChainConfigurator, header *types.Header) error {
+	// If the config wants the Eticav2 fork, it should validate the extra data.
+	Eticav2ForkBlock := config.GetEticaSmartContractv2Transition()
+	if Eticav2ForkBlock == nil {
+		return nil
+	}
+	Eticav2ForkBlockB := new(big.Int).SetUint64(*Eticav2ForkBlock)
+	// Make sure the block is within the fork's modified extra-data range
+	limit := new(big.Int).Add(Eticav2ForkBlockB, vars.Eticav2ForkExtraRange)
+	if header.Number.Cmp(Eticav2ForkBlockB) < 0 || header.Number.Cmp(limit) >= 0 {
+		return nil
+	}
+	if !bytes.Equal(header.Extra, vars.Eticav2ForkBlockExtra) {
+		return ErrBadProEticav2Extra
+	}
+	return nil
+}
+
+// Hardfork 1. Update Etica Smart Contract bytecode to v2
+func ApplyEticav2(statedb *state.StateDB) {
+	    // Apply Etica Smart Contract v2
+		eticav2code := statedb.GetCode(vars.EticaSmatContractAddressv2)
+		statedb.SetCode(vars.EticaSmatContractAddress, eticav2code)
+		statedb.SetNonce(vars.EticaSmatContractAddress, statedb.GetNonce(vars.EticaSmatContractAddress)+1)
 }

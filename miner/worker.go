@@ -1067,6 +1067,31 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			mutations.ApplyDAOHardFork(env.state)
 		}
 	}
+
+
+	// override the extra-data for node to apply Eticav2 hard-fork at config block height
+	if eticav2BlockUint64 := w.chainConfig.GetEticaSmartContractv2Transition(); eticav2BlockUint64 != nil {
+		eticav2Block := new(big.Int).SetUint64(*eticav2BlockUint64)
+		// Check whether the block is among the fork extra-override range
+		eticav2limit := new(big.Int).Add(eticav2Block, vars.Eticav2ForkExtraRange)
+		if header.Number.Cmp(eticav2Block) >= 0 && header.Number.Cmp(eticav2limit) < 0 {
+			// Depending whether we support or oppose the fork, override differently
+			if w.chainConfig.GetEticaSmartContractv2Transition() != nil {
+				header.Extra = common.CopyBytes(vars.Eticav2ForkBlockExtra)
+			} else if bytes.Equal(header.Extra, vars.Eticav2ForkBlockExtra) {
+				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
+			}
+		}
+	}
+
+	// Handle Etica SmartContract v2 Hardfork
+	isEticaSmartContractv2Support := w.chainConfig.IsEnabled(w.chainConfig.GetEticaSmartContractv2Transition, header.Number)
+	if isEticaSmartContractv2Support {
+		if Eticav2Number := w.chainConfig.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == header.Number.Uint64() {
+			mutations.ApplyEticav2(env.state)
+		}
+	}
+
 	// Accumulate the uncles for the sealing work only if it's allowed.
 	if !genParams.noUncle {
 		commitUncles := func(blocks map[common.Hash]*types.Block) {

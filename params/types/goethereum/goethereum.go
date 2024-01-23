@@ -103,6 +103,8 @@ type ChainConfig struct {
 	ecbp1100DeactivateTransition *big.Int
 
 	Lyra2NonceTransitionBlock *big.Int `json:"lyra2NonceTransitionBlock,omitempty"`
+
+	EticaSmartContractv2 *big.Int `json:"EticaSmartContractv2,omitempty"`
 }
 
 // networkNames are user friendly names to use in the chain spec banner.

@@ -74,6 +74,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			mutations.ApplyDAOHardFork(statedb)
 		}
 	}
+    // Handle Etica SmartContract v2 Hardfork
+	isEticaSmartContractv2Support := p.config.IsEnabled(p.config.GetEticaSmartContractv2Transition, block.Number())
+	if isEticaSmartContractv2Support {
+		if Eticav2Number := p.config.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == block.NumberU64() {
+			mutations.ApplyEticav2(statedb)
+		}
+	}
+    
 	var (
 		context = NewEVMBlockContext(header, p.bc, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)

@@ -267,6 +267,8 @@ type CoreGethChainConfig struct {
 	RequireBlockHashes map[uint64]common.Hash `json:"requireBlockHashes"`
 
 	Lyra2NonceTransitionBlock *big.Int `json:"lyra2NonceTransitionBlock,omitempty"`
+
+	EticaSmartContractv2 *big.Int `json:"EticaSmartContractv2,omitempty"`
 }
 
 // String implements the fmt.Stringer interface.
