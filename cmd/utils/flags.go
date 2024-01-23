@@ -175,6 +175,16 @@ var (
 		Usage:    "MintMe.com Coin mainnet: pre-configured MintMe.com Coin mainnet",
 		Category: flags.EthCategory,
 	}
+	EticaFlag = &cli.BoolFlag{
+		Name:     "etica",
+		Usage:    "Etica mainnet",
+		Category: flags.EthCategory,
+	}
+	CrucibleFlag = &cli.BoolFlag{
+		Name:     "crucible",
+		Usage:    "Crucible network: Etica testnet",
+		Category: flags.EthCategory,
+	}
 	MordorFlag = &cli.BoolFlag{
 		Name:     "mordor",
 		Usage:    "Mordor network: Ethereum Classic's cross-client proof-of-work test network",
@@ -1113,12 +1123,14 @@ var (
 		GoerliFlag,
 		SepoliaFlag,
 		MordorFlag,
+		CrucibleFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
 	NetworkFlags = append([]cli.Flag{
 		MainnetFlag,
 		ClassicFlag,
 		MintMeFlag,
+		EticaFlag,
 	}, TestnetFlags...)
 
 	// DatabasePathFlags is the flag group of all database path flags.
@@ -1189,6 +1201,10 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
 	case ctx.Bool(ClassicFlag.Name):
 		urls = params.ClassicBootnodes
+	case ctx.Bool(EticaFlag.Name):
+		urls = params.EticaBootnodes
+	case ctx.Bool(CrucibleFlag.Name):
+		urls = params.CrucibleBootnodes
 	case ctx.Bool(MintMeFlag.Name):
 		urls = params.MintMeBootnodes
 	case ctx.Bool(MordorFlag.Name):
@@ -1226,6 +1242,10 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
 	case ctx.IsSet(ClassicFlag.Name):
 		urls = params.ClassicBootnodes
+	case ctx.IsSet(EticaFlag.Name):
+		urls = params.EticaBootnodes
+	case ctx.IsSet(CrucibleFlag.Name):
+		urls = params.CrucibleBootnodes
 	case ctx.IsSet(MordorFlag.Name):
 		urls = params.MordorBootnodes
 	case ctx.Bool(GoerliFlag.Name):
@@ -1694,6 +1714,10 @@ func dataDirPathForCtxChainConfig(ctx *cli.Context, baseDataDirPath string) stri
 	switch {
 	case ctx.Bool(ClassicFlag.Name):
 		return filepath.Join(baseDataDirPath, "classic")
+	case ctx.Bool(EticaFlag.Name):
+		return filepath.Join(baseDataDirPath, "etica")
+	case ctx.Bool(CrucibleFlag.Name):
+		return filepath.Join(baseDataDirPath, "crucible")
 	case ctx.Bool(MordorFlag.Name):
 		return filepath.Join(baseDataDirPath, "mordor")
 	case ctx.Bool(GoerliFlag.Name):
@@ -1797,7 +1821,7 @@ func setEthashDatasetDir(ctx *cli.Context, cfg *ethconfig.Config) {
 	case ctx.IsSet(EthashDatasetDirFlag.Name):
 		cfg.Ethash.DatasetDir = ctx.String(EthashDatasetDirFlag.Name)
 
-	case (ctx.Bool(ClassicFlag.Name) || ctx.Bool(MordorFlag.Name)) && cfg.Ethash.DatasetDir == ethconfig.Defaults.Ethash.DatasetDir:
+	case (ctx.Bool(EticaFlag.Name) || ctx.Bool(CrucibleFlag.Name) || ctx.Bool(ClassicFlag.Name) || ctx.Bool(MordorFlag.Name)) && cfg.Ethash.DatasetDir == ethconfig.Defaults.Ethash.DatasetDir:
 		// ECIP-1099 is set, use etchash dir for DAGs instead
 		home := homeDir()
 
@@ -1952,7 +1976,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, DeveloperPoWFlag, GoerliFlag, SepoliaFlag, ClassicFlag, MordorFlag, MintMeFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, DeveloperPoWFlag, GoerliFlag, SepoliaFlag, ClassicFlag, EticaFlag, CrucibleFlag, MordorFlag, MintMeFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, DeveloperPoWFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.String(GCModeFlag.Name) == "archive" && ctx.Uint64(TxLookupLimitFlag.Name) != 0 {
@@ -2505,6 +2529,10 @@ func genesisForCtxChainConfig(ctx *cli.Context) *genesisT.Genesis {
 		genesis = params.DefaultClassicGenesisBlock()
 	case ctx.Bool(MordorFlag.Name):
 		genesis = params.DefaultMordorGenesisBlock()
+	case ctx.Bool(EticaFlag.Name):
+		genesis = params.DefaultEticaGenesisBlock()
+	case ctx.Bool(CrucibleFlag.Name):
+		genesis = params.DefaultCrucibleGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = params.DefaultSepoliaGenesisBlock()
 	case ctx.Bool(GoerliFlag.Name):

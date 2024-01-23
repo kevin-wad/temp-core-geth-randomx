@@ -335,6 +335,12 @@ func checkMainnet(ctx *cli.Context) bool {
      to 0, and discovery is disabled.
 `)
 
+	case ctx.IsSet(utils.EticaFlag.Name):
+		log.Info("Starting Geth on Etica mainnet...")
+
+	case ctx.IsSet(utils.CrucibleFlag.Name):
+		log.Info("Starting Geth on Crucible (Etica testnet)...")
+
 	case ctx.IsSet(utils.ClassicFlag.Name):
 		log.Info("Starting Geth on Ethereum Classic...")
 

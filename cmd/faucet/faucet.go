@@ -66,6 +66,8 @@ import (
 var (
 	foundationFlag = flag.Bool("chain.foundation", false, "Configure genesis and bootnodes for foundation chain defaults")
 	classicFlag    = flag.Bool("chain.classic", false, "Configure genesis and bootnodes for classic chain defaults")
+	eticaFlag     = flag.Bool("chain.etica", false, "Configure genesis and bootnodes for etica chain defaults")
+	crucibleFlag     = flag.Bool("chain.crucible", false, "Configure genesis and bootnodes for crucible (etica testnet) chain defaults")
 	mordorFlag     = flag.Bool("chain.mordor", false, "Configure genesis and bootnodes for mordor chain defaults")
 	testnetFlag    = flag.Bool("chain.testnet", false, "Configure genesis and bootnodes for testnet chain defaults")
 	rinkebyFlag    = flag.Bool("chain.rinkeby", false, "Configure genesis and bootnodes for rinkeby chain defaults")
@@ -112,6 +114,8 @@ var chainFlags = []*bool{
 	rinkebyFlag,
 	goerliFlag,
 	sepoliaFlag,
+	eticaFlag,
+	crucibleFlag,
 }
 
 var (
@@ -127,6 +131,10 @@ func faucetDirFromChainIndicators(chainID uint64, genesisHash common.Hash) strin
 		datadir = *datadirFlag
 	}
 	switch genesisHash {
+	case params.EticaGenesisHash:
+		return filepath.Join(datadir, "etica")
+	case params.CrucibleGenesisHash:
+		return filepath.Join(datadir, "crucible")
 	case params.MainnetGenesisHash:
 		if chainID == params.ClassicChainConfig.GetChainID().Uint64() {
 			return filepath.Join(datadir, "classic")
@@ -153,6 +161,8 @@ func parseChainFlags() (gs *genesisT.Genesis, bs string, netid uint64) {
 		{*mordorFlag, params.DefaultMordorGenesisBlock(), nil},
 		{*goerliFlag, params.DefaultGoerliGenesisBlock(), nil},
 		{*sepoliaFlag, params.DefaultSepoliaGenesisBlock(), nil},
+		{*eticaFlag, params.DefaultEticaGenesisBlock(), nil},
+		{*crucibleFlag, params.DefaultCrucibleGenesisBlock(), nil},
 	}
 
 	var bss []string

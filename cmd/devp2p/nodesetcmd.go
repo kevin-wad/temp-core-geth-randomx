@@ -237,6 +237,10 @@ func ethFilter(args []string) (nodeFilter, error) {
 		filter = forkid.NewStaticFilter(params.ClassicChainConfig, params.MainnetGenesisHash)
 	case "mordor":
 		filter = forkid.NewStaticFilter(params.MordorChainConfig, params.MordorGenesisHash)
+	case "etica":
+		filter = forkid.NewStaticFilter(params.EticaChainConfig, params.EticaGenesisHash)
+	case "crucible":
+		filter = forkid.NewStaticFilter(params.CrucibleChainConfig, params.CrucibleGenesisHash)
 	case "mintme":
 		filter = forkid.NewStaticFilter(params.MintMeChainConfig, params.MintMeGenesisHash)
 	default:

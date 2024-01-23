@@ -274,6 +274,10 @@ func configOrDefault(g *genesisT.Genesis, ghash common.Hash) ctypes.ChainConfigu
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		return params.MainnetChainConfig
+	case ghash == params.EticaGenesisHash:
+		return params.EticaChainConfig
+	case ghash == params.CrucibleGenesisHash:
+		return params.CrucibleChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
 	case ghash == params.MordorGenesisHash:
@@ -373,6 +377,10 @@ func CommitGenesisState(db ethdb.Database, hash common.Hash) error {
 		switch hash {
 		case params.MainnetGenesisHash:
 			genesis = params.DefaultGenesisBlock()
+		case params.EticaGenesisHash:
+			genesis = params.DefaultEticaGenesisBlock()
+		case params.CrucibleGenesisHash:
+			genesis = params.DefaultCrucibleGenesisBlock()
 		case params.GoerliGenesisHash:
 			genesis = params.DefaultGoerliGenesisBlock()
 		case params.SepoliaGenesisHash:

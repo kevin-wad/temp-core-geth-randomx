@@ -40,6 +40,10 @@ var chainspecFormats = func() []string {
 }()
 
 var defaultChainspecValues = map[string]ctypes.Configurator{
+
+	"etica":  params.DefaultEticaGenesisBlock(),
+	"crucible":  params.DefaultCrucibleGenesisBlock(),
+
 	"classic": params.DefaultClassicGenesisBlock(),
 	"mordor":  params.DefaultMordorGenesisBlock(),
 
