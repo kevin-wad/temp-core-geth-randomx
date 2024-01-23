@@ -20,6 +20,8 @@ Networks supported by the respective go-ethereum packaged `geth` program.
 
 | Ticker | Consensus         | Network                               | core-geth                                                | ethereum/go-ethereum |
 | ---    | ---               | ---                                   | ---                                                      | ---                  |
+|EGAZ/ETI| :zap:             | Etica                                 | :heavy_check_mark:                                       | :heavy_check_mark:   |
+| TEGAZ  | :zap:             | Crucible (Etica Testnet)              | :heavy_check_mark:                                       | :heavy_check_mark:   |
 | ETC    | :zap:             | Ethereum Classic                      | :heavy_check_mark:                                       |                      |
 | ETH    | :zap:             | Ethereum (Foundation)                 | :heavy_check_mark:                                       | :heavy_check_mark:   |
 | -      | :zap: :handshake: | Private chains                        | :heavy_check_mark:                                       | :heavy_check_mark:   |
