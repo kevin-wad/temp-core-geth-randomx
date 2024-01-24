@@ -18,6 +18,7 @@ package params
 import (
 	"math/big"
 	"github.com/ethereum/go-ethereum/params/types/coregeth"
+	"github.com/ethereum/go-ethereum/params/types/ctypes"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 	EticaChainConfig = &coregeth.CoreGethChainConfig{
 		NetworkID:                 61803,
 		ChainID:                   big.NewInt(61803),
+		Ethash:                    new(ctypes.EthashConfig),
 		
         //HomesteadBlock: big.NewInt(0),
 		EIP150Block: big.NewInt(0),
