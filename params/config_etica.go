@@ -26,20 +26,23 @@ var (
 	EticaChainConfig = &coregeth.CoreGethChainConfig{
 		NetworkID:                 61803,
 		ChainID:                   big.NewInt(61803),
-		Ethash:                    new(ctypes.EthashConfig),
+		Ethash:                        new(ctypes.EthashConfig),
 		
         //HomesteadBlock: big.NewInt(0),
+        //Homestead
+		EIP2FBlock: big.NewInt(0),
+		EIP7FBlock: big.NewInt(0),
+
 		EIP150Block: big.NewInt(0),
 		EIP155Block:  big.NewInt(0),
 
 		//EIP158FBlock: big.NewInt(0),
 		// EIP158~
+		EIP160FBlock: big.NewInt(0),
 		EIP161FBlock: big.NewInt(0),
 		EIP170FBlock: big.NewInt(0),
 
 		//ByzantiumBlock: big.NewInt(0),
-		//ConstantinopleBlock: big.NewInt(0),
-
 		// Byzantium eq
 		EIP100FBlock: big.NewInt(0),
 		EIP140FBlock: big.NewInt(0),
@@ -48,16 +51,32 @@ var (
 		EIP212FBlock: big.NewInt(0),
 		EIP213FBlock: big.NewInt(0),
 		EIP214FBlock: big.NewInt(0),
+		EIP649FBlock:  big.NewInt(0), // added
 		EIP658FBlock: big.NewInt(0),
+		
 
+		//ConstantinopleBlock: big.NewInt(0),
 		// Constantinople eq, aka Agharta
 		EIP145FBlock:  big.NewInt(0),
 		EIP1014FBlock: big.NewInt(0),
 		EIP1052FBlock: big.NewInt(0),
+		EIP1234FBlock:  big.NewInt(0), // added
+		EIP1283FBlock: big.NewInt(0), // added
 
 		PetersburgBlock: big.NewInt(0),
 
-		EticaSmartContractv2: big.NewInt(4423000), // need to be set to mainnet block height + delay
+		EticaSmartContractv2: big.NewInt(4450000), // need to be set to mainnet block height + delay
+
+		
+		// EIP1283FBlock:   big.NewInt(9573000),
+
+		/*DisposalBlock:      big.NewInt(5900000),
+		ECIP1017FBlock:     big.NewInt(5000000),
+		ECIP1017EraRounds:  big.NewInt(5000000),
+		ECIP1010PauseBlock: big.NewInt(3000000),
+		ECIP1010Length:     big.NewInt(2000000),
+		ECBP1100FBlock:     big.NewInt(11_380_000), // ETA 09 Oct 2020 */
+
 	}
 
 )
