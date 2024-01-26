@@ -918,6 +918,23 @@ func (c *CoreGethChainConfig) SetEthashEIP649Transition(n *uint64) error {
 	return nil
 }
 
+
+func (c *CoreGethChainConfig) GetEthashEIP1234Transition() *uint64 {
+	if c.GetConsensusEngineType() != ctypes.ConsensusEngineT_Ethash {
+		return nil
+	}
+	return bigNewU64(c.EIP1234FBlock)
+}
+
+func (c *CoreGethChainConfig) SetEthashEIP1234Transition(n *uint64) error {
+	if c.Ethash == nil {
+		return ctypes.ErrUnsupportedConfigFatal
+	}
+	c.EIP1234FBlock = setBig(c.EIP1234FBlock, n)
+	return nil
+}
+
+/*
 func (c *CoreGethChainConfig) GetEthashEIP1234Transition() *uint64 {
 	if c.GetConsensusEngineType() != ctypes.ConsensusEngineT_Ethash {
 		return nil
@@ -963,6 +980,7 @@ func (c *CoreGethChainConfig) SetEthashEIP1234Transition(n *uint64) error {
 
 	return nil
 }
+*/
 
 func (c *CoreGethChainConfig) GetEthashEIP2384Transition() *uint64 {
 	if c.GetConsensusEngineType() != ctypes.ConsensusEngineT_Ethash {
