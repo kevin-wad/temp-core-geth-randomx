@@ -1341,3 +1341,18 @@ func (c *CoreGethChainConfig) SetEticaSmartContractv2Transition(n *uint64) error
 	c.EticaSmartContractv2 = setBig(c.EticaSmartContractv2, n)
 	return nil
 }
+
+func (c *CoreGethChainConfig) GetEthashETIP1017Transition() *uint64 {
+	if c.GetConsensusEngineType() != ctypes.ConsensusEngineT_Ethash {
+		return nil
+	}
+	return bigNewU64(c.ETIP1017FBlock)
+}
+
+func (c *CoreGethChainConfig) SetEthashETIP1017Transition(n *uint64) error {
+	if c.Ethash == nil {
+		return ctypes.ErrUnsupportedConfigFatal
+	}
+	c.ETIP1017FBlock = setBig(c.ETIP1017FBlock, n)
+	return nil
+}

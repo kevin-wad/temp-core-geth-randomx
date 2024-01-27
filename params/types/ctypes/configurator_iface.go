@@ -316,6 +316,9 @@ type EthashConfigurator interface {
 	SetEthashDifficultyBombDelaySchedule(m Uint64BigMapEncodesHex) error
 	GetEthashBlockRewardSchedule() Uint64BigMapEncodesHex
 	SetEthashBlockRewardSchedule(m Uint64BigMapEncodesHex) error
+
+	GetEthashETIP1017Transition() *uint64
+	SetEthashETIP1017Transition(n *uint64) error
 }
 
 type CliqueConfigurator interface {

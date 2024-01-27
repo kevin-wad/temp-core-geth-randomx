@@ -67,6 +67,9 @@ var (
 
 		EticaSmartContractv2: big.NewInt(4450000), // need to be set to mainnet block height + delay
 
+		ETIP1017FBlock:     big.NewInt(0), // EGAZ tail emission, fixed 2 EGAZ per block reward
+		DisposalBlock:      big.NewInt(4700000),
+
 		
 		// EIP1283FBlock:   big.NewInt(9573000),
 

@@ -66,6 +66,8 @@ var (
 		PetersburgBlock: big.NewInt(0),
 
 		EticaSmartContractv2: big.NewInt(480000), // need to be set to mainnet block height + delay
+		ETIP1017FBlock:     big.NewInt(0), // EGAZ tail emission, fixed 2 EGAZ per block reward
+		DisposalBlock:      big.NewInt(750000),
 
 		
 		// EIP1283FBlock:   big.NewInt(9573000),

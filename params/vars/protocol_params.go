@@ -22,6 +22,7 @@ var (
 	FrontierBlockReward = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
 	EIP649FBlockReward  = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
 	EIP1234FBlockReward = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
+	ETIP1017BlockReward = big.NewInt(2e+18) // Block reward in wei for successfully mining a block, EGAZ  tail emission
 
 	// Values represent TOTAL delays, per specs
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-649.md

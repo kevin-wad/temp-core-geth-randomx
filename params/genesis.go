@@ -136,6 +136,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet common.Address, useEthash boo
 		DisposalBlock:      big.NewInt(0),
 		ECIP1017FBlock:     nil, // disable block reward disinflation
 		ECIP1017EraRounds:  nil, // ^
+		ETIP1017FBlock:     nil, // egaz tail emission
 		ECIP1010PauseBlock: nil, // no need for difficulty bomb delay (see disposal block)
 		ECIP1010Length:     nil, // ^
 	}

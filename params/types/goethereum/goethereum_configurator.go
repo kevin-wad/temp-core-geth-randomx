@@ -1165,3 +1165,17 @@ func (c *ChainConfig) SetEticaSmartContractv2Transition(n *uint64) error {
 	c.EticaSmartContractv2 = setBig(c.EticaSmartContractv2, n)
 	return nil
 }
+
+func (c *ChainConfig) GetEthashETIP1017Transition() *uint64 {
+	if c.GetConsensusEngineType() != ctypes.ConsensusEngineT_Ethash {
+		return nil
+	}
+	return nil
+}
+
+func (c *ChainConfig) SetEthashETIP1017Transition(i *uint64) error {
+	if i == nil {
+		return nil
+	}
+	return ctypes.ErrUnsupportedConfigFatal
+}

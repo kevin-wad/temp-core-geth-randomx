@@ -1058,3 +1058,11 @@ func (g *Genesis) GetEticaSmartContractv2Transition() *uint64 {
 func (g *Genesis) SetEticaSmartContractv2Transition(n *uint64) error {
 	return g.Config.SetEticaSmartContractv2Transition(n)
 }
+
+func (g *Genesis) GetEthashETIP1017Transition() *uint64 {
+	return g.Config.GetEthashETIP1017Transition()
+}
+
+func (g *Genesis) SetEthashETIP1017Transition(n *uint64) error {
+	return g.Config.SetEthashETIP1017Transition(n)
+}

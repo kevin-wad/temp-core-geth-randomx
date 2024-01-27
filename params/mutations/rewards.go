@@ -37,6 +37,9 @@ func GetRewards(config ctypes.ChainConfigurator, header *types.Header, uncles []
 	if config.IsEnabled(config.GetEthashECIP1017Transition, header.Number) {
 		return ecip1017BlockReward(config, header, uncles)
 	}
+	if config.IsEnabled(config.GetEthashETIP1017Transition, header.Number) {
+		return etip1017BlockReward(config, header, uncles)
+	}
 
 	blockReward := ctypes.EthashBlockReward(config, header.Number)
 
