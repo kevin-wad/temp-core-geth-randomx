@@ -1845,7 +1845,7 @@ func setEthashCacheDir(ctx *cli.Context, cfg *eth.Config) {
 	case ctx.IsSet(EthashCacheDirFlag.Name):
 		cfg.Ethash.CacheDir = ctx.String(EthashCacheDirFlag.Name)
 
-	case (ctx.Bool(ClassicFlag.Name) || ctx.Bool(MordorFlag.Name)) && cfg.Ethash.CacheDir == ethconfig.Defaults.Ethash.CacheDir:
+	case (ctx.Bool(EticaFlag.Name) || ctx.Bool(CrucibleFlag.Name) || ctx.Bool(ClassicFlag.Name) || ctx.Bool(MordorFlag.Name)) && cfg.Ethash.CacheDir == ethconfig.Defaults.Ethash.CacheDir:
 		// ECIP-1099 is set, use etchash dir for caches instead
 		cfg.Ethash.CacheDir = "etchash"
 	}
