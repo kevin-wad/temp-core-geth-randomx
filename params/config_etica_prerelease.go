@@ -61,9 +61,42 @@ var (
 		EIP1014FBlock: big.NewInt(0),
 		EIP1052FBlock: big.NewInt(0),
 		EIP1234FBlock:  big.NewInt(0), // added
-		EIP1283FBlock: big.NewInt(0), // added
+		//EIP1283FBlock: big.NewInt(0), // added
 
-		PetersburgBlock: big.NewInt(0),
+		//PetersburgBlock: big.NewInt(0),
+
+		ETIP1017FBlock:     big.NewInt(0), // EGAZ tail emission, fixed 2 EGAZ per block reward
+
+		DisposalBlock:      big.NewInt(8600000), // Stop difficulty bomb
+
+		// Istanbul eq, aka Phoenix
+		// ECIP-1088
+		EIP152FBlock:  big.NewInt(8700000),
+		EIP1108FBlock: big.NewInt(8700000),
+		EIP1344FBlock: big.NewInt(8700000),
+		EIP1884FBlock: big.NewInt(8700000),
+		EIP2028FBlock: big.NewInt(8700000),
+		EIP2200FBlock: big.NewInt(8700000), // RePetersburg (=~ re-1283)
+
+		ECIP1099FBlock:           big.NewInt(8_700_500), // Etchash (DAG size limit)
+
+		// Berlin eq, aka Magneto
+		EIP2565FBlock: big.NewInt(8701000),
+		EIP2718FBlock: big.NewInt(8701000),
+		EIP2929FBlock: big.NewInt(8701000),
+		EIP2930FBlock: big.NewInt(8701000),
+
+		// London (partially), aka Mystique
+		EIP3529FBlock: big.NewInt(8702000),
+		EIP3541FBlock: big.NewInt(8702000),
+
+        // Spiral, aka Shanghai (partially)
+		EIP3651FBlock: big.NewInt(8703000), // Warm COINBASE (gas reprice)
+		EIP3855FBlock: big.NewInt(8703000), // PUSH0 instruction
+		EIP3860FBlock: big.NewInt(8703000), // Limit and meter initcode
+		EIP6049FBlock: big.NewInt(8703000), // Deprecate SELFDESTRUCT (noop)
+
+		//EticaSmartContractv2: big.NewInt(8800000), // need to be set to mainnet block height + delay
 
 
 	}
