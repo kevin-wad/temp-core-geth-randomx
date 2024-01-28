@@ -23,7 +23,7 @@ import (
 
 var (
 	// EticaChainConfig is the chain parameters to run a node on the Etica main network.
-	EticaChainConfig = &coregeth.CoreGethChainConfig{
+	prerelaseEticaChainConfig = &coregeth.CoreGethChainConfig{
 		NetworkID:                 61803,
 		ChainID:                   big.NewInt(61803),
 		Ethash:                        new(ctypes.EthashConfig),
