@@ -96,7 +96,7 @@ var (
 		EIP3860FBlock: big.NewInt(8703000), // Limit and meter initcode
 		EIP6049FBlock: big.NewInt(8703000), // Deprecate SELFDESTRUCT (noop)
 
-		EticaSmartContractv2: big.NewInt(8800000), // need to be set to mainnet block height + delay
+		//EticaSmartContractv2: big.NewInt(8800000), // need to be set to mainnet block height + delay
 
 
 	}
