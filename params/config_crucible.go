@@ -71,12 +71,12 @@ var (
 
         // Istanbul eq, aka Phoenix
 		// ECIP-1088
-		EIP152FBlock:  big.NewInt(709_000),
-		EIP1108FBlock: big.NewInt(709_000),
-		EIP1344FBlock: big.NewInt(709_000),
-		EIP1884FBlock: big.NewInt(709_000),
-		EIP2028FBlock: big.NewInt(709_000),
-		EIP2200FBlock: big.NewInt(709_000), // RePetersburg (=~ re-1283)
+		EIP152FBlock:  big.NewInt(703_010),
+		EIP1108FBlock: big.NewInt(703_010),
+		EIP1344FBlock: big.NewInt(703_010),
+		EIP1884FBlock: big.NewInt(703_010),
+		EIP2028FBlock: big.NewInt(703_010),
+		EIP2200FBlock: big.NewInt(703_010), // RePetersburg (=~ re-1283)
 
 		// ECIP1099 For the smoothest possible transition activation should occur on 
 		//  a block in which an epoch transition to an even epoch number is occurring.
@@ -86,23 +86,23 @@ var (
 		//ECIP1099FBlock: big.NewInt(780_000), // Etchash (DAG size limit) (never activated yet, 780_000 is just indicative)
 
 		// Berlin eq, aka Magneto
-		EIP2565FBlock: big.NewInt(709_050),
-		EIP2718FBlock: big.NewInt(709_050),
-		EIP2929FBlock: big.NewInt(709_050),
-		EIP2930FBlock: big.NewInt(709_050),
+		EIP2565FBlock: big.NewInt(703_050),
+		EIP2718FBlock: big.NewInt(703_050),
+		EIP2929FBlock: big.NewInt(703_050),
+		EIP2930FBlock: big.NewInt(703_050),
 
 		// London (partially), aka Mystique
-		EIP3529FBlock: big.NewInt(709_100),
-		EIP3541FBlock: big.NewInt(709_100),
+		EIP3529FBlock: big.NewInt(703_100),
+		EIP3541FBlock: big.NewInt(703_100),
 
         // Spiral, aka Shanghai (partially)
-		EIP3651FBlock: big.NewInt(709_150), // Warm COINBASE (gas reprice)
-		EIP3855FBlock: big.NewInt(709_150), // PUSH0 instruction
-		EIP3860FBlock: big.NewInt(709_150), // Limit and meter initcode
-		EIP6049FBlock: big.NewInt(709_150), // Deprecate SELFDESTRUCT (noop)
+		EIP3651FBlock: big.NewInt(703_150), // Warm COINBASE (gas reprice)
+		EIP3855FBlock: big.NewInt(703_150), // PUSH0 instruction
+		EIP3860FBlock: big.NewInt(703_150), // Limit and meter initcode
+		EIP6049FBlock: big.NewInt(703_150), // Deprecate SELFDESTRUCT (noop)
 
 
-		EticaSmartContractv2: big.NewInt(708_000), // need to be set to testnet block height + delay
+		EticaSmartContractv2: big.NewInt(703_000), // need to be set to testnet block height + delay
 		
 	}
 
