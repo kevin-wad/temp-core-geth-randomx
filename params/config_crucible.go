@@ -67,7 +67,7 @@ var (
 
 		ETIP1017FBlock:     big.NewInt(0), // EGAZ tail emission, fixed 2 EGAZ per block reward
 
-		DisposalBlock:      big.NewInt(750_000), // Stop difficulty bomb
+		DisposalBlock:      big.NewInt(703_020), // Stop difficulty bomb
 
         // Istanbul eq, aka Phoenix
 		// ECIP-1088
@@ -102,7 +102,7 @@ var (
 		EIP6049FBlock: big.NewInt(703_150), // Deprecate SELFDESTRUCT (noop)
 
 
-		EticaSmartContractv2: big.NewInt(703_000), // need to be set to testnet block height + delay
+		EticaSmartContractv2: big.NewInt(703_000), // Etica smart contract hardfork 1
 		
 	}
 
