@@ -322,7 +322,18 @@ func GenerateChain(config ctypes.ChainConfigurator, parent *types.Block, engine 
 			mutations.ApplyDAOHardFork(statedb)
 		}
 		if config.GetEticaSmartContractv2Transition() != nil && *config.GetEticaSmartContractv2Transition() == b.header.Number.Uint64() {
-			mutations.ApplyEticav2(statedb)
+			configEticaChainId := config.GetChainID(); 
+			const EticaChainId = 61803
+            const CrucibleChainId = 61888
+            // Convert *big.Int to uint64
+			configEticaChainIdUint64 := configEticaChainId.Uint64()
+			EticaChainIdUint64 := uint64(EticaChainId)
+			CrucibleChainIdUint64 := uint64(CrucibleChainId)
+			if configEticaChainIdUint64 == EticaChainIdUint64 {
+				mutations.ApplyEticav2(statedb)
+			} else if configEticaChainIdUint64 == CrucibleChainIdUint64 {
+				mutations.ApplyCruciblev2(statedb)
+			}
 		}
 		
 		// Execute any user modifications to the block

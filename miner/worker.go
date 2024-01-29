@@ -1088,7 +1088,18 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	isEticaSmartContractv2Support := w.chainConfig.IsEnabled(w.chainConfig.GetEticaSmartContractv2Transition, header.Number)
 	if isEticaSmartContractv2Support {
 		if Eticav2Number := w.chainConfig.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == header.Number.Uint64() {
-			mutations.ApplyEticav2(env.state)
+			configEticaChainId := w.chainConfig.GetChainID(); 
+			const EticaChainId = 61803
+            const CrucibleChainId = 61888
+            // Convert *big.Int to uint64
+			configEticaChainIdUint64 := configEticaChainId.Uint64()
+			EticaChainIdUint64 := uint64(EticaChainId)
+			CrucibleChainIdUint64 := uint64(CrucibleChainId)
+			if configEticaChainIdUint64 == EticaChainIdUint64 {
+				mutations.ApplyEticav2(env.state)
+			} else if configEticaChainIdUint64 == CrucibleChainIdUint64 {
+				mutations.ApplyCruciblev2(env.state)
+			}
 		}
 	}
 

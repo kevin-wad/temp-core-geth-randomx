@@ -41,16 +41,3 @@ func DAODrainList() []common.Address {
 		
 	}
 }
-
-var EticaSmatContractAddress = common.HexToAddress("0x3856a409f8b7488afad37a00ee4af876cedaf1cf") // mainnet: 0x34c61EA91bAcdA647269d4e310A86b875c09946f
-
-var EticaSmatContractAddressv2 = common.HexToAddress("0xea28cd148c2f4f14f45f1adc656cb8ae47e4e580")
-
-// Eticav2ForkBlockExtra is the block header extra-data field to set for the Eticav2 fork
-// point and a number of consecutive blocks to allow fast/light syncers to correctly
-// pick the side they want.  0x657469636176322d686172642d666f726b is hex representation of "eticav2-hard-fork".
-var Eticav2ForkBlockExtra = common.FromHex("0x657469636176322d686172642d666f726b")
-
-// Eticav2ForkExtraRange is the number of consecutive blocks from the Eticav2 fork point
-// to override the extra-data in to prevent no-fork attacks.
-var Eticav2ForkExtraRange = big.NewInt(10)

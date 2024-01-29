@@ -78,7 +78,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	isEticaSmartContractv2Support := p.config.IsEnabled(p.config.GetEticaSmartContractv2Transition, block.Number())
 	if isEticaSmartContractv2Support {
 		if Eticav2Number := p.config.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == block.NumberU64() {
-			mutations.ApplyEticav2(statedb)
+			configEticaChainId := p.config.GetChainID(); 
+			const EticaChainId = 61803
+            const CrucibleChainId = 61888
+            // Convert *big.Int to uint64
+			configEticaChainIdUint64 := configEticaChainId.Uint64()
+			EticaChainIdUint64 := uint64(EticaChainId)
+			CrucibleChainIdUint64 := uint64(CrucibleChainId)
+			if configEticaChainIdUint64 == EticaChainIdUint64 {
+				mutations.ApplyEticav2(statedb)
+			} else if configEticaChainIdUint64 == CrucibleChainIdUint64 {
+				mutations.ApplyCruciblev2(statedb)
+			}
 		}
 	}
     

@@ -78,7 +78,12 @@ var (
 		EIP2028FBlock: big.NewInt(8700000),
 		EIP2200FBlock: big.NewInt(8700000), // RePetersburg (=~ re-1283)
 
-		ECIP1099FBlock:           big.NewInt(8_700_500), // Etchash (DAG size limit)
+		// ECIP1099 For the smoothest possible transition activation should occur on 
+		//  a block in which an epoch transition to an even epoch number is occurring.
+		//	Epoch 388/2 = 194 (good) = block 11_640_000
+		//	Epoch 389/2 = 194.5 (bad) -
+		//	Epoch 390/2 = 195 (good) = block 11_700_000
+		//ECIP1099FBlock:           big.NewInt(8_700_000), // Etchash (DAG size limit) (never activated yet, 8_700_000 is just indicative)
 
 		// Berlin eq, aka Magneto
 		EIP2565FBlock: big.NewInt(8701000),

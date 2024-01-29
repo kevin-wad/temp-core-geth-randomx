@@ -189,7 +189,19 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig ctypes.ChainConfigura
 	isEticaSmartContractv2Support := chainConfig.IsEnabled(chainConfig.GetEticaSmartContractv2Transition, new(big.Int).SetUint64(pre.Env.Number))
 	if isEticaSmartContractv2Support {
 		if Eticav2Number := chainConfig.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == pre.Env.Number {
-			mutations.ApplyEticav2(statedb)
+			configEticaChainId := chainConfig.GetChainID(); 
+			const EticaChainId = 61803
+            const CrucibleChainId = 61888
+            // Convert *big.Int to uint64
+			configEticaChainIdUint64 := configEticaChainId.Uint64()
+			EticaChainIdUint64 := uint64(EticaChainId)
+			CrucibleChainIdUint64 := uint64(CrucibleChainId)
+			if configEticaChainIdUint64 == EticaChainIdUint64 {
+				mutations.ApplyEticav2(statedb)
+			} else if configEticaChainIdUint64 == CrucibleChainIdUint64 {
+				mutations.ApplyCruciblev2(statedb)
+			}
+
 		}
 	}
 
