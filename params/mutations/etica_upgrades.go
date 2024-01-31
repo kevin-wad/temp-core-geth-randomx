@@ -66,7 +66,7 @@ func VerifyEticav2HeaderExtraData(config ctypes.ChainConfigurator, header *types
 	return nil
 }
 
-// Hardfork 1. Update Etica Smart Contract bytecode to v2
+// (Meticulous, Etica Hardfork 1). Update Etica Smart Contract bytecode to v2
 func ApplyEticav2(statedb *state.StateDB) {
 	    // Apply Etica Smart Contract v2
 		eticav2code := statedb.GetCode(vars.EticaSmartContractAddressv2)
@@ -74,7 +74,7 @@ func ApplyEticav2(statedb *state.StateDB) {
 		statedb.SetNonce(vars.EticaSmartContractAddress, statedb.GetNonce(vars.EticaSmartContractAddress)+1)
 }
 
-// Hardfork 1. Update Etica Smart Contract bytecode to v2
+// (Meticulous, Etica Hardfork 1). Update Etica Smart Contract bytecode to v2
 func ApplyCruciblev2(statedb *state.StateDB) {
 	// Apply Etica Smart Contract v2
 	cruciblev2code := statedb.GetCode(vars.CrucibleSmartContractAddressv2)

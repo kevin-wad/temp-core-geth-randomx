@@ -102,7 +102,7 @@ var (
 		EIP6049FBlock: big.NewInt(703_150), // Deprecate SELFDESTRUCT (noop)
 
 
-		EticaSmartContractv2: big.NewInt(703_000), // Etica smart contract hardfork 1
+		EticaSmartContractv2: big.NewInt(703_000), // Etica smart contract (Meticulous, Etica Hardfork 1)
 		
 	}
 
