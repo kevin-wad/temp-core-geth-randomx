@@ -61,9 +61,47 @@ var (
 		EIP1014FBlock: big.NewInt(0),
 		EIP1052FBlock: big.NewInt(0),
 		EIP1234FBlock:  big.NewInt(0), // added
-		EIP1283FBlock: big.NewInt(0), // added
+		//EIP1283FBlock: big.NewInt(0), // added
 
-		PetersburgBlock: big.NewInt(0),
+		//PetersburgBlock: big.NewInt(0),
+
+		ETIP1017FBlock:     big.NewInt(0), // EGAZ tail emission, fixed 2 EGAZ per block reward
+
+		DisposalBlock:      big.NewInt(4481020), // Stop difficulty bomb
+
+		// Istanbul eq, aka Phoenix
+		// ECIP-1088
+		EIP152FBlock:  big.NewInt(4481010),
+		EIP1108FBlock: big.NewInt(4481010),
+		EIP1344FBlock: big.NewInt(4481010),
+		EIP1884FBlock: big.NewInt(4481010),
+		EIP2028FBlock: big.NewInt(4481010),
+		EIP2200FBlock: big.NewInt(4481010), // RePetersburg (=~ re-1283)
+
+		// ECIP1099 For the smoothest possible transition activation should occur on 
+		//  a block in which an epoch transition to an even epoch number is occurring.
+		//	Epoch 388/2 = 194 (good) = block 11_640_000
+		//	Epoch 389/2 = 194.5 (bad) -
+		//	Epoch 390/2 = 195 (good) = block 11_700_000
+		//ECIP1099FBlock:           big.NewInt(8_700_000), // Etchash (DAG size limit) (never activated yet, 8_700_000 is just indicative)
+
+		// Berlin eq, aka Magneto
+		EIP2565FBlock: big.NewInt(4481050),
+		EIP2718FBlock: big.NewInt(4481050),
+		EIP2929FBlock: big.NewInt(4481050),
+		EIP2930FBlock: big.NewInt(4481050),
+
+		// London (partially), aka Mystique
+		EIP3529FBlock: big.NewInt(4481100),
+		EIP3541FBlock: big.NewInt(4481100),
+
+        // Spiral, aka Shanghai (partially)
+		EIP3651FBlock: big.NewInt(4481150), // Warm COINBASE (gas reprice)
+		EIP3855FBlock: big.NewInt(4481150), // PUSH0 instruction
+		EIP3860FBlock: big.NewInt(4481150), // Limit and meter initcode
+		EIP6049FBlock: big.NewInt(4481150), // Deprecate SELFDESTRUCT (noop)
+
+		EticaSmartContractv2: big.NewInt(4481000), // Etica smart contract (Meticulous, Etica Hardfork 1)
 
 
 	}

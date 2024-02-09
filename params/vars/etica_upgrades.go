@@ -24,12 +24,12 @@ import (
 
 
 // Etica Mainnet Smart Contract //
-var EticaSmartContractAddress = common.HexToAddress("") // will be set to mainnet: 0x34c61EA91bAcdA647269d4e310A86b875c09946f
+var EticaSmartContractAddress = common.HexToAddress("0x34c61EA91bAcdA647269d4e310A86b875c09946f") // Etica Mainnet Smart Contract
 // Crucible Testnet Smart Contract //
 var CrucibleSmartContractAddress = common.HexToAddress("0x558593Bc92E6F242a604c615d93902fc98efcA82")
 
 // --------- Smart contract hardfork 1, main smart contract loads bytecode from following contract ----------- //
-var EticaSmartContractAddressv2 = common.HexToAddress("") // waiting for deployment
+var EticaSmartContractAddressv2 = common.HexToAddress("0x64cB3Bc8cF8324432838B5c58519F782482C9861") // Etica v2, Meticulous Hardfork
 var CrucibleSmartContractAddressv2 = common.HexToAddress("0x3cA0Dc9373F33993Ec25643B92759ce637C8400f")
 // --------- Smart contract hardfork 1 ----------- //
 
