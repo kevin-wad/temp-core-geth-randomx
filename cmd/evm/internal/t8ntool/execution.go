@@ -189,10 +189,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig ctypes.ChainConfigura
 	isEticaSmartContractv2Support := chainConfig.IsEnabled(chainConfig.GetEticaSmartContractv2Transition, new(big.Int).SetUint64(pre.Env.Number))
 	if isEticaSmartContractv2Support {
 		if Eticav2Number := chainConfig.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == pre.Env.Number {
-			configEticaChainId := chainConfig.GetChainID(); 
+			configEticaChainId := chainConfig.GetChainID()
 			const EticaChainId = 61803
-            const CrucibleChainId = 61888
-            // Convert *big.Int to uint64
+			const CrucibleChainId = 61888
+			// Convert *big.Int to uint64
 			configEticaChainIdUint64 := configEticaChainId.Uint64()
 			EticaChainIdUint64 := uint64(EticaChainId)
 			CrucibleChainIdUint64 := uint64(CrucibleChainId)
@@ -203,6 +203,30 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig ctypes.ChainConfigura
 			}
 
 		}
+	}
+
+	fmt.Println("---- execution.go CHECKING !!! isEticaRandomXSupport")
+	log.Info("Info ------------- > execution.go CHECKING !! isEticaRandomXSupport < ---------------")
+	
+	// Handle Etica RandomwX v3 Hardfork
+	isEticaRandomXSupport := chainConfig.IsEnabled(chainConfig.GetEticaRandomXTransition, new(big.Int).SetUint64(pre.Env.Number))
+	if isEticaRandomXSupport {
+		fmt.Println("Forced console output:", "---- execution.go isEticaRandomXSupport passed")
+		fmt.Printf("---- Etica RandomX is supported for this block %d\n :", pre.Env.Number)
+		fmt.Println("Forced console output:", "blockNumber", pre.Env.Number)
+		randomXnb := chainConfig.GetEticaRandomXTransition
+		fmt.Printf("Etica RandomX transition block: %d\n", *randomXnb())
+		log.Info("Info ----------- > execution.go isEticaRandomXSupport passed  < ---------------")
+
+
+	} else {
+		fmt.Println("---- execution.go isEticaRandomXSupport not passed")
+		fmt.Println("Forced console output:", "---- execution.go isEticaRandomXSupport not passed")
+		fmt.Printf("---- Etica RandomX is not supported for this block %d\n :", pre.Env.Number)
+		fmt.Printf("Etica RandomX is not supported for this block %d\n :", pre.Env.Number)
+		randomXnb := chainConfig.GetEticaRandomXTransition
+		fmt.Printf("Etica RandomX transition block: %d\n", *randomXnb())
+		log.Info("Info ------------- > execution.go isEticaRandomXSupport not passed < ---------------")
 	}
 
 	var blobGasUsed uint64

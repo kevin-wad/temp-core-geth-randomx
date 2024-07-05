@@ -1489,6 +1489,9 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // the index number of the failing block as well an error describing what went
 // wrong. After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
+	log.Info("*--*--*--*--*------------ InsertChain CALLED *--*--*--*--*--------------------------")
+	log.Debug("InsertChain CALLED", "*--*--*--*--*------------ InsertChain CALLED *--*--*--*--*--------------------------")
+	log.Warn("InsertChain CALLED", "*--*--*--*--*------------ InsertChain CALLED *--*--*--*--*--------------------------")
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil

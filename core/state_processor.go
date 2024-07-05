@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/params/mutations"
 	"github.com/ethereum/go-ethereum/params/types/ctypes"
 	"github.com/ethereum/go-ethereum/params/vars"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -74,14 +75,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			mutations.ApplyDAOHardFork(statedb)
 		}
 	}
-    // Handle Etica SmartContract v2 Hardfork
+	// Handle Etica SmartContract v2 Hardfork
 	isEticaSmartContractv2Support := p.config.IsEnabled(p.config.GetEticaSmartContractv2Transition, block.Number())
 	if isEticaSmartContractv2Support {
 		if Eticav2Number := p.config.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == block.NumberU64() {
-			configEticaChainId := p.config.GetChainID(); 
+			configEticaChainId := p.config.GetChainID()
 			const EticaChainId = 61803
-            const CrucibleChainId = 61888
-            // Convert *big.Int to uint64
+			const CrucibleChainId = 61888
+			// Convert *big.Int to uint64
 			configEticaChainIdUint64 := configEticaChainId.Uint64()
 			EticaChainIdUint64 := uint64(EticaChainId)
 			CrucibleChainIdUint64 := uint64(CrucibleChainId)
@@ -92,7 +93,21 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			}
 		}
 	}
-    
+	fmt.Println("---- state_processor.go CHECKING !!! isEticaRandomXSupport")
+	log.Info("Info ------------- > state_processor.go CHECKING !! isEticaRandomXSupport < ---------------")
+	isEticaRandomXSupport := p.config.IsEnabled(p.config.GetEticaRandomXTransition, block.Number())
+	if isEticaRandomXSupport {
+		fmt.Println("---- state_processor.go isEticaRandomXSupport passed")
+		log.Info("Info ------------- > state_processor.go isEticaRandomXSupport passed < ---------------")
+		fmt.Println("Forced console output:", "---- state_processor.go state_processor.go isEticaRandomXSupport passed")
+
+	} else {
+		fmt.Println("---- state_processor.go isEticaRandomXSupport not passed")
+		log.Info("Info ------------- > state_processor.go isEticaRandomXSupport not passed < ---------------")
+		fmt.Println("Forced console output:", "---- state_processor.go state_processor.go isEticaRandomXSupport not passed")
+		fmt.Printf("Etica RandomX is not supported for this block %d\n :", block.Number())
+	}
+
 	var (
 		context = NewEVMBlockContext(header, p.bc, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
@@ -179,6 +194,33 @@ func applyTransaction(msg *Message, config ctypes.ChainConfigurator, gp *GasPool
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config ctypes.ChainConfigurator, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
+	
+	fmt.Printf("*-*-*-*-**-*-*-*-*-*- ApplyTransaction *-*-*-*-*-**-*-*-*-*-*-*-*-*-")
+	fmt.Println("---- ApplyTransaction CHECKING !!! isEticaRandomXSupport")
+    log.Info("Info ------------- > ApplyTransaction CHECKING !! isEticaRandomXSupport < ---------------")
+    
+    isEticaRandomXSupport := config.IsEnabled(config.GetEticaRandomXTransition, header.Number)
+    if isEticaRandomXSupport {
+        fmt.Println("---- ApplyTransaction isEticaRandomXSupport passed")
+        log.Info("Info ------------- > ApplyTransaction isEticaRandomXSupport passed < ---------------")
+        fmt.Println("Forced console output:", "---- ApplyTransaction isEticaRandomXSupport passed")
+        
+		fmt.Printf("*-*-*-*-**-*-*-*-*-*- calling VerifyEticaTransaction *-*-*-*-*-**-*-*-*-*-*-*-*-*-")
+        err := mutations.VerifyEticaTransaction(tx, statedb)
+        if err != nil {
+            log.Error("Etica transaction verification failed", "err", err)
+            return nil, err
+        }
+    } else {
+        fmt.Println("---- ApplyTransaction isEticaRandomXSupport not passed")
+        log.Info("Info ------------- > ApplyTransaction isEticaRandomXSupport not passed < ---------------")
+        fmt.Println("Forced console output:", "---- ApplyTransaction isEticaRandomXSupport not passed")
+        fmt.Printf("Etica RandomX is not supported for this block %d\n", header.Number)
+        randomXnb := config.GetEticaRandomXTransition
+        fmt.Printf("Etica RandomX transition block: %d\n", *randomXnb())
+    }
+	
+	
 	msg, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number, header.Time), header.BaseFee)
 	if err != nil {
 		return nil, err

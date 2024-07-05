@@ -1068,7 +1068,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		}
 	}
 
-
 	// override the extra-data for node to apply Eticav2 hard-fork at config block height
 	if eticav2BlockUint64 := w.chainConfig.GetEticaSmartContractv2Transition(); eticav2BlockUint64 != nil {
 		eticav2Block := new(big.Int).SetUint64(*eticav2BlockUint64)
@@ -1087,20 +1086,39 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Handle Etica SmartContract v2 Hardfork
 	isEticaSmartContractv2Support := w.chainConfig.IsEnabled(w.chainConfig.GetEticaSmartContractv2Transition, header.Number)
 	if isEticaSmartContractv2Support {
+		fmt.Println("---- worker.go.GOING TO APPLY Eticav2")
 		if Eticav2Number := w.chainConfig.GetEticaSmartContractv2Transition(); Eticav2Number != nil && *Eticav2Number == header.Number.Uint64() {
-			configEticaChainId := w.chainConfig.GetChainID(); 
+			configEticaChainId := w.chainConfig.GetChainID()
 			const EticaChainId = 61803
-            const CrucibleChainId = 61888
-            // Convert *big.Int to uint64
+			const CrucibleChainId = 61888
+			// Convert *big.Int to uint64
 			configEticaChainIdUint64 := configEticaChainId.Uint64()
 			EticaChainIdUint64 := uint64(EticaChainId)
 			CrucibleChainIdUint64 := uint64(CrucibleChainId)
 			if configEticaChainIdUint64 == EticaChainIdUint64 {
+				fmt.Println("---- worker.go. APPLYING Eticav2")
 				mutations.ApplyEticav2(env.state)
 			} else if configEticaChainIdUint64 == CrucibleChainIdUint64 {
+				fmt.Println("---- worker.go. APPLYING Cruciblev2")
 				mutations.ApplyCruciblev2(env.state)
 			}
 		}
+	}
+
+	fmt.Println("---- worker.go.go CHECKING !!! isEticaRandomXSupport")
+	log.Info("Info ------------- > worker.go CHECKING !! isEticaRandomXSupport < ---------------")
+	isEticaRandomXSupport := w.chainConfig.IsEnabled(w.chainConfig.GetEticaRandomXTransition, header.Number)
+	if isEticaRandomXSupport {
+		fmt.Println("---- worker.go isEticaRandomXSupport passed")
+		fmt.Printf("---- Etica RandomX is supported for this block %d\n :", header.Number)
+		randomXnb := w.chainConfig.GetEticaRandomXTransition
+		fmt.Printf("Etica RandomX transition block: %d\n", *randomXnb())
+			
+	} else {
+		fmt.Println("---- worker.go isEticaRandomXSupport not passed")
+		fmt.Printf("Etica RandomX is not supported for this block %d\n :", header.Number)
+		randomXnb := w.chainConfig.GetEticaRandomXTransition
+		fmt.Printf("Etica RandomX transition block: %d\n", *randomXnb())
 	}
 
 	// Accumulate the uncles for the sealing work only if it's allowed.

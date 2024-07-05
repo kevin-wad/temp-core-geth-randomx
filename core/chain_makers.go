@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/params/types/genesisT"
 	"github.com/ethereum/go-ethereum/params/vars"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // BlockGen creates blocks for testing.
@@ -315,17 +316,17 @@ func GenerateChain(config ctypes.ChainConfigurator, parent *types.Block, engine 
 		if eticav2Block := config.GetEticaSmartContractv2Transition(); eticav2Block != nil {
 			eticav2limit := new(big.Int).Add(new(big.Int).SetUint64(*eticav2Block), vars.Eticav2ForkExtraRange)
 			if b.header.Number.Uint64() >= *eticav2Block && b.header.Number.Cmp(eticav2limit) < 0 {
-					b.header.Extra = common.CopyBytes(vars.Eticav2ForkBlockExtra)
+				b.header.Extra = common.CopyBytes(vars.Eticav2ForkBlockExtra)
 			}
 		}
 		if generic.AsGenericCC(config).DAOSupport() && config.GetEthashEIP779Transition() != nil && *config.GetEthashEIP779Transition() == b.header.Number.Uint64() {
 			mutations.ApplyDAOHardFork(statedb)
 		}
 		if config.GetEticaSmartContractv2Transition() != nil && *config.GetEticaSmartContractv2Transition() == b.header.Number.Uint64() {
-			configEticaChainId := config.GetChainID(); 
+			configEticaChainId := config.GetChainID()
 			const EticaChainId = 61803
-            const CrucibleChainId = 61888
-            // Convert *big.Int to uint64
+			const CrucibleChainId = 870321
+			// Convert *big.Int to uint64
 			configEticaChainIdUint64 := configEticaChainId.Uint64()
 			EticaChainIdUint64 := uint64(EticaChainId)
 			CrucibleChainIdUint64 := uint64(CrucibleChainId)
@@ -335,7 +336,23 @@ func GenerateChain(config ctypes.ChainConfigurator, parent *types.Block, engine 
 				mutations.ApplyCruciblev2(statedb)
 			}
 		}
-		
+
+		fmt.Println("---- chain_makers.go CHECKING !!! isEticaRandomXSupport")
+	    log.Info("Info ------------- > chain_makers.go CHECKING !! isEticaRandomXSupport < ---------------")
+		if config.GetEticaRandomXTransition() != nil && *config.GetEticaRandomXTransition() == b.header.Number.Uint64() {
+
+			fmt.Println("---- chain_makers.go isEticaRandomXSupport passed")
+			fmt.Printf("---- Etica RandomX is supported for this block %d\n :", b.header.Number)
+			randomXnb := config.GetEticaRandomXTransition()
+			fmt.Printf("Etica RandomX transition block: %d\n", randomXnb)
+
+		} else {
+			fmt.Println("---- chain_makers.go isEticaRandomXSupport not passed")
+			fmt.Printf("Etica RandomX is not supported for this block %d\n :", b.header.Number)
+			randomXnb := config.GetEticaRandomXTransition()
+			fmt.Printf("Etica RandomX transition block: %d\n", randomXnb)
+		}
+
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
