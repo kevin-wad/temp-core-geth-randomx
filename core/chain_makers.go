@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/confp/generic"
 	"github.com/ethereum/go-ethereum/params/mutations"
@@ -35,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/params/types/genesisT"
 	"github.com/ethereum/go-ethereum/params/vars"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // BlockGen creates blocks for testing.
@@ -325,7 +325,7 @@ func GenerateChain(config ctypes.ChainConfigurator, parent *types.Block, engine 
 		if config.GetEticaSmartContractv2Transition() != nil && *config.GetEticaSmartContractv2Transition() == b.header.Number.Uint64() {
 			configEticaChainId := config.GetChainID()
 			const EticaChainId = 61803
-			const CrucibleChainId = 870321
+			const CrucibleChainId = 870322
 			// Convert *big.Int to uint64
 			configEticaChainIdUint64 := configEticaChainId.Uint64()
 			EticaChainIdUint64 := uint64(EticaChainId)
@@ -338,7 +338,7 @@ func GenerateChain(config ctypes.ChainConfigurator, parent *types.Block, engine 
 		}
 
 		fmt.Println("---- chain_makers.go CHECKING !!! isEticaRandomXSupport")
-	    log.Info("Info ------------- > chain_makers.go CHECKING !! isEticaRandomXSupport < ---------------")
+		log.Info("Info ------------- > chain_makers.go CHECKING !! isEticaRandomXSupport < ---------------")
 		if config.GetEticaRandomXTransition() != nil && *config.GetEticaRandomXTransition() == b.header.Number.Uint64() {
 
 			fmt.Println("---- chain_makers.go isEticaRandomXSupport passed")
