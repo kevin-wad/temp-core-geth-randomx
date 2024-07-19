@@ -23,9 +23,9 @@ import (
 )
 
 // Etica Mainnet Smart Contract //
-var EticaSmartContractAddress = common.HexToAddress("0x63AD62E0b729CA6ee54700E09b501955132E0373") // Etica Mainnet Smart Contract
+var EticaSmartContractAddress = common.HexToAddress("0x034da4D74E440754BbA16656b725BC4C2441c9Ad") // Etica Mainnet Smart Contract
 // Crucible Testnet Smart Contract //
-var CrucibleSmartContractAddress = common.HexToAddress("0x63AD62E0b729CA6ee54700E09b501955132E0373")
+var CrucibleSmartContractAddress = common.HexToAddress("0x034da4D74E440754BbA16656b725BC4C2441c9Ad")
 
 // --------- Smart contract hardfork 1, main smart contract loads bytecode from following contract ----------- //
 var EticaSmartContractAddressv2 = common.HexToAddress("0xd129Ce1842d5E5c93cF91B9024d863869D33d1cc") // Etica v2, Meticulous Hardfork
