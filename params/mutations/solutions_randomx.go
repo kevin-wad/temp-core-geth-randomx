@@ -77,76 +77,42 @@ func CheckRandomxSolution(vm unsafe.Pointer, blobWithNonce []byte, expectedHash 
 
 	calculatedHash := calculateRandomXHash(blobWithNonce, seedHash)
 
-	fmt.Printf("Calculated Hash: %x\n", calculatedHash)
-	fmt.Printf("Expected Hash:   %x\n", expectedHash)
-	fmt.Printf("blobWithNonce:   %x\n", blobWithNonce)
-	fmt.Printf("seedHash:   %x\n", seedHash)
-
 	if !bytes.Equal(calculatedHash, expectedHash) {
 		return false, fmt.Errorf("expectedHash does not match calculated hash")
 	}
 
+	reversedHash := reverseBytes(calculatedHash)
 	// Convert calculated hash to big.Int
-	calculatedHashInt := new(big.Int).SetBytes(calculatedHash)
+	reversedHashInt := new(big.Int).SetBytes(reversedHash)
+
+	fmt.Printf("Calculated Hash: %x\n", calculatedHash)
+	fmt.Printf("Reversed Hash:   %x\n", reversedHash)
+	fmt.Printf("Expected Hash:   %x\n", expectedHash)
+	fmt.Printf("blobWithNonce:   %x\n", blobWithNonce)
+	fmt.Printf("seedHash:        %x\n", seedHash)
 
 	fmt.Printf("Target (hex):    %x\n", claimedTarget.Bytes())
-	fmt.Printf("Calculated Hash (decimal): %s\n", calculatedHashInt.String())
+	fmt.Printf("Reversed Hash (decimal): %s\n", reversedHashInt.String())
 	fmt.Printf("Target (decimal):          %s\n", claimedTarget.String())
 
 	// Compare hash with target
-	comparisonResult := calculatedHashInt.Cmp(claimedTarget)
-	fmt.Printf("Comparison result (hash vs target): %d\n", comparisonResult)
-	fmt.Printf("Is hash less than target? %v\n", comparisonResult < 0)
-	fmt.Printf("Is hash equal to target?  %v\n", comparisonResult == 0)
-	fmt.Printf("Is hash greater than target? %v\n", comparisonResult > 0)
+	comparisonResult := reversedHashInt.Cmp(claimedTarget)
 
 	// Check if the hash meets the target difficulty
 	if comparisonResult > 0 {
-		// Additional debug information
-		fmt.Printf("Hash does not meet target. Difference: %s\n", new(big.Int).Sub(calculatedHashInt, claimedTarget).String())
-
-		// Check if the difference is small
-		diff := new(big.Int).Sub(calculatedHashInt, claimedTarget)
-		smallDiff := new(big.Int).Exp(big.NewInt(10), big.NewInt(10), nil) // 10^10 as a small difference threshold
-		if diff.Cmp(smallDiff) < 0 {
-			fmt.Printf("The difference is small (less than 10^10). This might be due to rounding or precision issues.\n")
-		}
-
-		return false, fmt.Errorf("hash does not meet claimed target difficulty (hash: %s, target: %s)", calculatedHashInt.String(), claimedTarget.String())
+		return false, fmt.Errorf("hash does not meet claimed target difficulty (hash: %s, target: %s)", reversedHashInt.String(), claimedTarget.String())
 	}
-
-	// Additional checks
-	fmt.Printf("First byte of hash:  0x%02x\n", calculatedHash[0])
-	fmt.Printf("First byte of target: 0x%02x\n", claimedTarget.Bytes()[0])
-
-	// Check leading zero bytes
-	hashLeadingZeros := countLeadingZeroBytes(calculatedHash)
-	targetLeadingZeros := countLeadingZeroBytes(claimedTarget.Bytes())
-	fmt.Printf("Leading zero bytes in hash:   %d\n", hashLeadingZeros)
-	fmt.Printf("Leading zero bytes in target: %d\n", targetLeadingZeros)
-
-	// Hexdump of the first 16 bytes of hash and target for visual comparison
-	fmt.Printf("First 16 bytes of hash:  %s\n", hex.Dump(calculatedHash[:16]))
-	fmt.Printf("First 16 bytes of target: %s\n", hex.Dump(claimedTarget.Bytes()[:16]))
 
 	return true, nil
 
 }
 
-func countLeadingZeroBytes(data []byte) int {
-	for i, b := range data {
-		if b != 0 {
-			return i
-		}
+func reverseBytes(data []byte) []byte {
+	reversed := make([]byte, len(data))
+	for i := range data {
+		reversed[i] = data[len(data)-1-i]
 	}
-	return len(data)
-}
-
-// Helper function to convert target from big.Int to target as bytes
-func targetToBigEndianBytes(target *big.Int) []byte {
-	targetBytes := make([]byte, 32)
-	target.FillBytes(targetBytes)
-	return targetBytes
+	return reversed
 }
 
 func calculateRandomXHash(blobWithNonce, seedHash []byte) []byte {
